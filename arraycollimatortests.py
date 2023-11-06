@@ -17,7 +17,7 @@ uniform_array = AntennaArray(x, np.zeros_like(x), np.zeros_like(x), exc, 10e9)
 
 # %% Non-uniform linear array definition
 # circular section angle
-tc = 100 * pi / 180
+tc = 150 * pi / 180
 # radius
 r = x[-1] / (sin(tc / 2))
 # individual points theta angle
@@ -83,7 +83,8 @@ for i in range(1, N - 1):
     exc[i] = ((xc[i + 1] - xc[i]) / 2 + (xc[i] - xc[i - 1]) / 2)
 exc[-1] = ((xc[-1] - xc[-2]) / 2)
 # conservation of power
-exc = exc / np.sum(exc) * N
+sigma = np.sqrt(np.sum(exc**2) / N)
+exc /= sigma
 # Setting the excitations
 non_uniform_array.excitations = exc
 curved_array.excitations = exc
@@ -122,7 +123,8 @@ for i in range(N):
     exc[i] = (sin(-tc / 2 + (i + 1 / 2) * tc / (N-1)) - sin(-tc / 2 + (i - 1 / 2) * tc / (N-1)))
 
 # conservation of power
-exc = exc / np.sum(exc) * N
+sigma = np.sqrt(np.sum(exc**2) / N)
+exc /= sigma
 # Setting the excitations
 non_uniform_array.excitations = exc
 curved_array.excitations = exc
@@ -173,10 +175,11 @@ plt.show()
 # excitation generation algorithm 3
 exc = np.zeros_like(x)
 for i in range(N):
-    exc[i] = (sin(-tc / 2 + (i + 1 / 2) * tc / (N-1)) - sin(-tc / 2 + (i - 1 / 2) * tc / (N-1)))**(2/3)
+    exc[i] = (sin(-tc / 2 + (i + 1 / 2) * tc / (N-1)) - sin(-tc / 2 + (i - 1 / 2) * tc / (N-1)))**(2)
 
 # conservation of power
-exc = exc / np.sum(exc) * N
+sigma = np.sqrt(np.sum(exc**2) / N)
+exc /= sigma
 # Setting the excitations
 non_uniform_array.excitations = exc
 curved_array.excitations = exc
