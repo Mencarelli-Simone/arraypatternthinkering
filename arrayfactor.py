@@ -63,9 +63,39 @@ class AntennaArray:
         # return to original shape
         return af.reshape(original_shape)
 
+    def near_field_projection(self, points_x, points_y, points_z):
+        """
+        Returns the near field projection of the array at the specified points of a second
+        virtual array as complex excitation values for the virtual array geometry passed as input
+        :param points_x: x coordinates meshgrid or 1-d vector [m]
+        :param points_y: y coordinates meshgrid or 1-d vector [m]
+        :param points_z: z coordinates meshgrid or 1-d vector [m]
+        :return: complex array excitations for the virtual array, same size as points_x, points_y, points_z [neper]
+        """
+        # near field point locations in 3-d cartesian [m,m,m]
+        # relative range vector matrix generation:
+        # 1. repeat the points array as many times as the number of sources
+        Px = np.repeat(points_x.reshape(-1, 1), self.points.shape[1], axis=1)
+        Py = np.repeat(points_y.reshape(-1, 1), self.points.shape[1], axis=1)
+        Pz = np.repeat(points_z.reshape(-1, 1), self.points.shape[1], axis=1)
+        # 2. repeat the self.points array as many times as the number of points
+        Sx = np.repeat(self.points[0, :].reshape(1, -1), points_x.shape[0], axis=0)
+        Sy = np.repeat(self.points[1, :].reshape(1, -1), points_y.shape[0], axis=0)
+        Sz = np.repeat(self.points[2, :].reshape(1, -1), points_z.shape[0], axis=0)
+        # 3. calculate the relative range vector matrix
+        R = np.array([Px - Sx, Py - Sy, Pz - Sz])
+        # 4. calculate the relative range vector matrix norm
+        R_norm = np.linalg.norm(R, axis=0)
+        # find the transfer function matrix
+        H = np.exp(-1j * self.k * R_norm) / R_norm * 1 / (4 * np.pi)
+        # calculate the excitations
+        excitations = H @ self.excitations
+        # return the excitations
+        return excitations
+
 
 if __name__ == '__main__':
-    # Test 1: 1-d array, uniform excitation
+    # %% Test 1: 1-d array, uniform excitation
     # wavelength
     lam = 3e8 / 10e9
     # spacing
@@ -107,3 +137,41 @@ if __name__ == '__main__':
     ax.plot(theta * 180 / np.pi, np.abs(af))
     plt.show()
 
+    # %% Test 3: Near field projection
+    # wavelength
+    lam = 3e8 / 10e9
+    # spacing
+    dx = lam / 2
+    # 10 lambda array
+    x = np.arange(-5 * lam, 5 * lam, dx)
+    # excitation
+    ex = np.ones_like(x)
+    # array object
+    array = AntennaArray(x, np.zeros_like(x), np.zeros_like(x), ex, 10e9)
+    # near field points
+    nx = np.arange(-5 * lam, 5 * lam, dx)
+    ny = np.ones_like(nx)
+    nz = np.zeros_like(nx)
+    # near field projection
+    exc = array.near_field_projection(nx, ny, nz)
+    # plot
+    fig, ax = plt.subplots(1)
+    ax.plot(nx, np.abs(exc))
+    ax.plot(nx, np.angle(exc))
+    plt.show()
+
+    # %% New array with the near field projection excitations
+    # conservation of power
+    exc *= np.sqrt(np.sum(np.abs(ex) ** 2) / np.sum(np.abs(exc) ** 2))
+    # array object
+    array2 = AntennaArray(nx, ny, nz, exc, 10e9)
+    # theta and phi coordinates
+    theta = np.linspace(-np.pi / 2, np.pi / 2, 360)
+    phi = np.ones_like(theta) * 0\
+    # array factor\
+    af1 = array2.factor(theta, phi)
+    # plot
+    fig, ax = plt.subplots(1)
+    ax.plot(theta * 180 / np.pi, np.abs(af1))
+    ax.plot(theta * 180 / np.pi, np.abs(af))
+    plt.show()
