@@ -164,7 +164,7 @@ if __name__ == '__main__':
     # conservation of power
     exc *= np.sqrt(np.sum(np.abs(ex) ** 2) / np.sum(np.abs(exc) ** 2))
     # array object
-    array2 = AntennaArray(nx, ny, nz, exc, 10e9)
+    array2 = AntennaArray(nx, ny, nz, np.abs(exc), 10e9)
     # theta and phi coordinates
     theta = np.linspace(-np.pi / 2, np.pi / 2, 360)
     phi = np.ones_like(theta) * 0\
