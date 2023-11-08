@@ -54,12 +54,18 @@ class AntennaArray:
         ky = r * np.sin(theta) * np.sin(phi)
         kz = r * np.cos(theta)
         k = np.array([kx, ky, kz])
-        k *= self.k
-        # phase of each source, calculated as the dot product of the spatial frequency k
-        # with the array points
-        phase = k.T @ self.points
-        # array factor
-        af = np.sum(self.excitations * np.exp(1j * phase), axis=1)
+        k *= self.k # scaling
+        # # phase of each source, calculated as the dot product of the spatial frequency k
+        # # with the array points
+        # phase = k.T @ self.points
+        # Array factor transfer function matrix
+        H = np.exp(1j * k.T @ self.points)
+        # Array factor as a linear transformation
+        af = H @ self.excitations
+        # # array factor
+        # af = np.sum(self.excitations * np.exp(1j * phase), axis=1)
+        # save transfer function matrix
+        self.H = H
         # return to original shape
         return af.reshape(original_shape)
 

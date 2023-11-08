@@ -10,7 +10,7 @@ from arrayfactor import AntennaArray
 # %% Uniform linear array definition
 lam = 3e8 / 10e9
 dx = lam / 2
-N = 13
+N = 23
 x = np.arange(N) * dx - (N - 1) * dx / 2
 exc = np.ones_like(x)
 uniform_array = AntennaArray(x, np.zeros_like(x), np.zeros_like(x), exc, 10e9)
@@ -226,3 +226,38 @@ ax.set_ylim(-20, 20 * np.log10(N)+1)
 ax.legend()
 plt.show()
 
+#%% excitation algorithm 4
+# near field projection
+# near field points = curved array points
+excitations = uniform_array.near_field_projection(curved_array.points[0], curved_array.points[1]-r, curved_array.points[2])
+excitations = np.abs(excitations)
+# power conservation
+sigma = np.sqrt(np.sum(excitations**2) / N)
+excitations /= sigma
+# set the excitations
+curved_array.excitations = np.abs(excitations)
+non_uniform_array.excitations = np.abs(excitations)
+
+# %% Plot excitation patterns
+fig, ax = plt.subplots(1)
+ax.plot(xc, curved_array.excitations, label='Excitation curved array')
+ax.plot(x, uniform_array.excitations, label='Excitation uniform array')
+ax.set_xlabel('x [m]')
+ax.set_ylabel('Excitation')
+plt.show()
+# %% Plot of the array factors
+theta = np.linspace(-pi / 2, pi / 2, 360)
+phi = np.ones_like(theta) * 90
+# recompute the array factors
+af_non_uniform = non_uniform_array.factor(theta, phi)
+af_curved = curved_array.factor(theta, phi)
+af_uniform = uniform_array.factor(theta, phi)
+fig, ax = plt.subplots(1)
+ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(af_uniform)), label='Uniform linear array')
+ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(af_non_uniform)), label='Non-uniform linear array')
+ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(af_curved)), '--', label='Curved array')
+ax.set_xlabel('theta [deg]')
+ax.set_ylabel('Array factor [dB]')
+ax.set_ylim(-20, 20 * np.log10(N))
+ax.legend()
+plt.show()
