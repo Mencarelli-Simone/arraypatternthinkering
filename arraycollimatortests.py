@@ -247,7 +247,7 @@ ax.set_ylabel('Excitation')
 plt.show()
 # %% Plot of the array factors
 theta = np.linspace(-pi / 2, pi / 2, 360)
-phi = np.ones_like(theta) * 90
+phi = np.ones_like(theta) * 0
 # recompute the array factors
 af_non_uniform = non_uniform_array.factor(theta, phi)
 af_curved = curved_array.factor(theta, phi)
@@ -261,3 +261,4 @@ ax.set_ylabel('Array factor [dB]')
 ax.set_ylim(-20, 20 * np.log10(N))
 ax.legend()
 plt.show()
+
