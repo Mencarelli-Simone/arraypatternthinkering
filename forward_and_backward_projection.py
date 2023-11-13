@@ -22,7 +22,7 @@ lam = 3e8 / 10e9
 # element spacing
 dx = lam / 2
 # number of elements
-N = 51
+N = 23
 # x coordinates of the elements
 x = np.arange(N) * dx - (N - 1) * dx / 2
 # circular section angle
