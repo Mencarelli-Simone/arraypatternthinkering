@@ -14,7 +14,7 @@ from numpy import pi, sin, cos, tan
 import matplotlib
 
 # set pyqt5 rendering
-matplotlib.use('Qt5Agg')
+#matplotlib.use('Qt5Agg')
 
 # %% define the array, i.e. a 2-d circular section array
 # Reference uniform linear array
