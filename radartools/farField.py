@@ -330,6 +330,10 @@ class UniformAperture(Aperture):
 
         return E_theta, E_phi
 
+    # todo add a mesh_E_field_theor method
+    def mesh_E_field_theor(self, theta_mesh: np.ndarray, phi_mesh: np.ndarray, polarization="y"):
+        pass
+
     def get_radiated_power(self):
         """
         returns the radiated power (depends on the electric field distribution)
