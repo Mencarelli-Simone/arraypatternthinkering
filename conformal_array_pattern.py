@@ -2,12 +2,12 @@
 # Simone Mencarelli
 # This file contains a class to calculate the array pattern of a conformal array, considering the
 # rotation of the individual elements assuming elemental broadside being the normal to the conformal surface.
-
+import matplotlib.pyplot as plt
 # %% imports
 import numpy as np
 import scipy as sp
 from radartools.farField import UniformAperture
-from numba import jit, prange, float64, types
+from numba import jit, prange, float64, types, complex128
 from numpy import sin, cos, tan
 
 
@@ -40,6 +40,7 @@ def far_field_global_to_local_spherical_coordinates(theta_global, phi_global,
         R[:, 0] = el_x[:, j]
         R[:, 1] = el_y[:, j]
         R[:, 2] = el_z[:, j]
+        R = R.T
         # for every far field plane wave direction
         for i in prange(theta_global.size):  # could be done using just array multiplication
             #                                  appropriately (but it doesn't work with jit that way)
@@ -53,6 +54,11 @@ def far_field_global_to_local_spherical_coordinates(theta_global, phi_global,
     return theta_local, phi_local
 
 
+@jit(types.Tuple((complex128[:, :], complex128[:, :], complex128[:, :]))
+         (float64[:], float64[:],
+          float64[:, :], float64[:, :],
+          float64[:, :], float64[:, :], float64[:, :],
+          complex128[:, :], complex128[:, :]), nopython=True, parallel=True)
 def far_field_local_to_global_spherical_coordinates(theta_global, phi_global,
                                                     theta_local, phi_local,
                                                     el_x, el_y, el_z,
@@ -64,19 +70,19 @@ def far_field_local_to_global_spherical_coordinates(theta_global, phi_global,
     :param phi_global: global phi coordinate radiation direction SHALL be a 1d array [m_points] [rad]
     :param theta_local: theta coordinates in the local system SHALL be a 2d array [m_points, n_points] [rad]
     :param phi_local: phi coordinates in the local system SHALL be a 2d array [m_points, n_points] [rad]
-    :param el_x: local x versors SHALL be a 2d array [3, n_points]
-    :param el_y: local y versors SHALL be a 2d array [3, n_points]
-    :param el_z: local z versors SHALL be a 2d array [3, n_points]
+    :param el_x: local coordinate x versors SHALL be a 2d array [3, n_points]
+    :param el_y: local coordinate y versors SHALL be a 2d array [3, n_points]
+    :param el_z: local z coordinate versors SHALL be a 2d array [3, n_points]
     :param e_theta_local: local theta component of the electric field SHALL be a 2d array [m_points, n_points]
     :param e_phi_local: local phi component of the electric field SHALL be a 2d array [m_points, n_points]
     :return: e_r_global, e_theta_global, e_phi_global, same size as theta_global or phi_global [V/m]
     """
     # 0. Unravel the arrays for calculation
     original_shape = e_theta_local.shape
-    e_t = e_theta_local.reshape(-1)
-    e_p = e_phi_local.reshape(-1)
-    theta_local = theta_local.reshape(-1)
-    phi_local = phi_local.reshape(-1)
+    e_t = np.ascontiguousarray(e_theta_local).reshape(-1)
+    e_p = np.ascontiguousarray(e_phi_local).reshape(-1)
+    theta_local = np.ascontiguousarray(theta_local).reshape(-1)
+    phi_local = np.ascontiguousarray(phi_local).reshape(-1)
 
     # 1. transform the spherical local coordinates to the cartesian local coordinates vector field
     e_x_local = cos(theta_local) * cos(phi_local) * e_t - sin(phi_local) * e_p
@@ -89,30 +95,30 @@ def far_field_local_to_global_spherical_coordinates(theta_global, phi_global,
     e_z_local = e_z_local.reshape(original_shape)
 
     # 2.1 initialize the global spherical coordinate output electric field
-    e_r_global = np.zeros_like(e_x_local) # it should be zero at the end, computing it just to see if its working
+    e_r_global = np.zeros_like(e_x_local)  # it should be zero at the end, computing it just to see if its working
     e_theta_global = np.zeros_like(e_x_local)
     e_phi_global = np.zeros_like(e_x_local)
 
     # 3. for every radiator in the array compute the global cartesian coordinates transformation matrix
-    for j in prange(el_x.shape[1]): # n points (number of array cells)
+    for j in prange(el_x.shape[1]):  # n points (number of array cells)
         # 3.1. create the rotation matrix from the local coordinate system to the global one for the current element
-        R = np.empty((3, 3))
+        R = np.empty((3, 3), dtype=complex128)
         R[:, 0] = el_x[:, j]
         R[:, 1] = el_y[:, j]
         R[:, 2] = el_z[:, j]
-        R = R.T
+
         # 4. for every radiation angle:
-        for i in prange(original_shape[0]): # m points (number of radiation angles)
+        for i in prange(original_shape[0]):  # m points (number of radiation angles)
             # 4.1. transform the e field in local cartesian coordinates to the global cartesian coordinates e field
             E_cart = R @ np.array(
-                [e_x_local[i, j], e_y_local[i, j], e_z_local[i, j]])
+                [e_x_local[i, j], e_y_local[i, j], e_z_local[i, j]])  # is this right?
             # 4.2. transform the global cartesian coordinates to the global spherical coordinates electric field
             # spherical coordinates transformation matrix for current radiation angle
             S = np.array([[cos(phi_global[i]) * sin(theta_global[i]), sin(phi_global[i]) * sin(theta_global[i]),
                            cos(theta_global[i])],
                           [cos(phi_global[i]) * cos(theta_global[i]), sin(phi_global[i]) * cos(theta_global[i]),
                            -sin(theta_global[i])],
-                          [-sin(phi_global[i]), cos(phi_global[i]), 0]])
+                          [-sin(phi_global[i]), cos(phi_global[i]), 0]], dtype=complex128)
             [e_r_global[i, j], e_theta_global[i, j], e_phi_global[i, j]] = S @ E_cart
 
     return e_r_global, e_theta_global, e_phi_global
@@ -174,6 +180,9 @@ class ConformalArray:
         # unravel the arrays for calculation
         theta = theta.reshape(-1)
         phi = phi.reshape(-1)
+        # renormalise theta and phi
+        phi = np.where(theta < 0, (phi - np.pi) % (np.pi * 2), phi)
+        theta = np.abs(theta)
         # range coordinate
         r = np.ones_like(theta)
         # polar to cartesian coordinates conversion, vector plane wave (spatial frequency)
@@ -186,10 +195,24 @@ class ConformalArray:
         theta_local, phi_local = far_field_global_to_local_spherical_coordinates(theta, phi,
                                                                                  self.el_x, self.el_y, self.el_z)
         # 2. compute the far field of the individual elements
-        E_theta, E_phi = self.element_antenna.mesh_E_field(theta_local, phi_local)
+        E_theta, E_phi = self.element_antenna.mesh_E_field_theor(theta_local, phi_local)
+        # 2.1 transform the far field to the global spherical coordinates
+        E_theta, E_phi, E_r = far_field_local_to_global_spherical_coordinates(theta, phi, theta_local, phi_local,
+                                                                             self.el_x, self.el_y, self.el_z,
+                                                                             E_theta, E_phi)
         # 3. Array factor transfer function matrix
         H = np.exp(1j * k.T @ self.points)
-        pass
+        # 3.1 create the array factor matrix for the theta and phi components with amplitude
+        H_theta = H * E_theta
+        H_phi = H * E_phi
+        # 3.2 save the array factor matrix for the theta and phi components
+        self.H_theta = H_theta
+        self.H_phi = H_phi
+        # 4. compute the total electric field in the far field
+        E_t = H_theta @ self.excitations
+        E_p = H_phi @ self.excitations
+        # 5 return the electric field in the far field
+        return E_t.reshape(original_shape), E_p.reshape(original_shape)
 
     def near_field(self, theta, phi):
         pass  # don't need it for the moment, might be useful for feed arrays in the future
@@ -229,6 +252,8 @@ if __name__ == '__main__':
     # define the angles for the far field, discretized in sin(theta) and phi
     theta = np.linspace(-np.pi / 2, np.pi / 2, 21)
     phi = np.ones_like(theta) * 0
+    phi = np.where(theta < 0, (phi - np.pi) % (2 * np.pi), phi)
+    theta = np.abs(theta)
     l_t, l_p = far_field_global_to_local_spherical_coordinates(theta, phi, uniform_array.el_x, uniform_array.el_y,
                                                                uniform_array.el_z)
     # works well for the uniform linear array case
@@ -241,10 +266,24 @@ if __name__ == '__main__':
     e_t, e_p = element_aperture.mesh_E_field(l_t, l_p)
     # transform the far field from local to global spherical coordinates
     el_r, el_t, el_p = far_field_local_to_global_spherical_coordinates(theta, phi, l_t, l_p,
-                                                                    uniform_array.el_x, uniform_array.el_y,
-                                                                    uniform_array.el_z, e_t, e_p)
+                                                                       uniform_array.el_x, uniform_array.el_y,
+                                                                       uniform_array.el_z, e_t, e_p)
     # DEBUG
     print('pippo')
     # the resulting el_t and el_p should be the same of e_t and e_p, just repeated for every element
     # e_r should be 0 or near 0
-
+    # %% test the far_field function
+    # define the angles for the far field, discretized in sin(theta) and phi
+    theta = np.linspace(-np.pi / 2, np.pi / 2, 361)
+    phi = np.ones_like(theta) * 0
+    # evaluate the far field of the uniform aperture at the local theta and phi coordinates
+    e_t, e_p = uniform_array.far_field(theta, phi)
+    radiatedPower = np.sum(np.abs(exc) ** 2)
+    # plot the gain
+    g = np.array(
+        2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (120 * np.pi * radiatedPower),
+        dtype=float)
+    fig, ax = plt.subplots(1)
+    ax.plot(theta, g)
+    plt.show()
+    print("pippo") # todo debug the theoretial efield function. is clearly not working as it should.

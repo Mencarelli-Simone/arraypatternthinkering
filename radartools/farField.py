@@ -1,7 +1,7 @@
 # by Simone Mencarelli
 # created on 28.01.2022
-# the following file has been modified for the current project
-# Sept 2023
+# the following file has been modified for the current project eg. theor antenna pattern
+# November 2023
 # some things are working some things aren't, test before use.
 
 ##################### DEPENDENCIES ####################
@@ -150,6 +150,8 @@ class Aperture:
         kx = self.k * cos(phi_mesh) * sin(theta_mesh)
         ky = self.k * sin(phi_mesh) * sin(theta_mesh)
         f = sin(kx * self.L / 2) / (kx * self.L / 2) * sin(ky * self.W / 2) / (ky * self.W / 2) * self.L * self.W
+        # substitute nan with 1
+        f = np.where(np.isnan(f), 1, f)
         return theta_mesh, phi_mesh, f
 
     def field_transform(self, theta: np.ndarray, phi: np.ndarray, interpolation="simpson",
@@ -330,9 +332,32 @@ class UniformAperture(Aperture):
 
         return E_theta, E_phi
 
-    # todo add a mesh_E_field_theor method
     def mesh_E_field_theor(self, theta_mesh: np.ndarray, phi_mesh: np.ndarray, polarization="y"):
-        pass
+        """
+        retruns the E field in theta and phi coordinates. using the theoretical formulation for
+        the far field transform of the uniform aperture.
+        see eq. 18.5.3 of Orfanidis, Electromagnetic waves and Antennas
+        the range is assumed to be 1 m
+        :param theta_mesh:
+        :param phi_mesh:
+        :param polarization: orientation of E field on the aperture
+        :return: E_theta, E_phi
+        """
+        self.Theta, self.Phi, self.f = self.theor_rect_field_transform(theta_mesh, phi_mesh)
+        # obliquity factors for Huygens source, differences in polarization come in the cas e of PEC or PMC apertures
+        c_t = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
+        c_p = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
+        # c_phi and c_theta are different for modified huygenes sources (different source impedance)
+        if polarization == "x":
+            E_theta = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_t * (self.f * np.cos(self.Phi))
+            E_phi = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_p * (- self.f * np.sin(self.Phi))
+        if polarization == "y":
+            E_theta = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_t * (self.f * np.sin(self.Phi))
+            E_phi = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_p * (self.f * np.cos(self.Phi))
+        else:
+            print("Error, polarization shall be either x or y")
+
+        return E_theta, E_phi
 
     def get_radiated_power(self):
         """
