@@ -199,7 +199,7 @@ class ConformalArray:
         # 2. compute the far field of the individual elements
         E_theta, E_phi = self.element_antenna.mesh_E_field_theor(theta_local, phi_local)
         # 2.1 transform the far field to the global spherical coordinates
-        E_theta, E_phi, E_r = far_field_local_to_global_spherical_coordinates(theta, phi, theta_local, phi_local,
+        E_r, E_theta, E_phi = far_field_local_to_global_spherical_coordinates(theta, phi, theta_local, phi_local,
                                                                               self.el_x, self.el_y, self.el_z,
                                                                               E_theta, E_phi)
         # 3. Array factor transfer function matrix
@@ -335,18 +335,18 @@ if __name__ == '__main__':
 
     # %% test the array far_field function
     # define the angles for the far field, discretized in sin(theta) and phi
-    theta = np.linspace(-np.pi / 10, np.pi / 10, 11)
+    theta = np.linspace(-np.pi / 2, np.pi / 2, 361)
     phi = np.ones_like(theta) * 0
     phi = np.where(theta < 0, (phi + np.pi) % (2 * np.pi), phi)
     theta1 = np.abs(theta)
     # evaluate the far field of the array aperture at the local theta and phi coordinates
     e_t, e_p = uniform_array.far_field(theta1, phi)
-    radiatedPower = np.sum(np.abs(exc) ** 2 * uniform_array.element_antenna.get_radiated_power() ** 2)
+    radiatedPower = np.sum(np.abs(exc) ** 2 * uniform_array.element_antenna.get_radiated_power())
     # plot the gain
     g = np.array(
-        2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (120 * np.pi * radiatedPower),
+        2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (uniform_array.element_antenna.eta * radiatedPower),
         dtype=float)
     fig, ax = plt.subplots(1)
     ax.plot(theta, g)
     plt.show()
-    print("pippo")  # todo debug the theoretial efield function. is clearly not working as it should.
+    print("pippo")
