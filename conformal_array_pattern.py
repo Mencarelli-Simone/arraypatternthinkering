@@ -83,6 +83,8 @@ def far_field_local_to_global_spherical_coordinates(theta_global, phi_global,
     e_p = np.ascontiguousarray(e_phi_local).reshape(-1)
     theta_local = np.ascontiguousarray(theta_local).reshape(-1)
     phi_local = np.ascontiguousarray(phi_local).reshape(-1)
+    phi_local = np.where(theta_local < 0, (phi_local + np.pi) % (2 * np.pi), phi_local) # doesn't change anything
+    theta_local = np.abs(theta_local)
 
     # 1. transform the spherical local coordinates to the cartesian local coordinates vector field
     e_x_local = cos(theta_local) * cos(phi_local) * e_t - sin(phi_local) * e_p
@@ -180,7 +182,7 @@ class ConformalArray:
         # unravel the arrays for calculation
         theta = theta.reshape(-1)
         phi = phi.reshape(-1)
-        # renormalise theta and phi
+        # # renormalise theta and phi
         phi = np.where(theta < 0, (phi - np.pi) % (np.pi * 2), phi)
         theta = np.abs(theta)
         # range coordinate
@@ -198,8 +200,8 @@ class ConformalArray:
         E_theta, E_phi = self.element_antenna.mesh_E_field_theor(theta_local, phi_local)
         # 2.1 transform the far field to the global spherical coordinates
         E_theta, E_phi, E_r = far_field_local_to_global_spherical_coordinates(theta, phi, theta_local, phi_local,
-                                                                             self.el_x, self.el_y, self.el_z,
-                                                                             E_theta, E_phi)
+                                                                              self.el_x, self.el_y, self.el_z,
+                                                                              E_theta, E_phi)
         # 3. Array factor transfer function matrix
         H = np.exp(1j * k.T @ self.points)
         # 3.1 create the array factor matrix for the theta and phi components with amplitude
@@ -272,13 +274,16 @@ if __name__ == '__main__':
     print('pippo')
     # the resulting el_t and el_p should be the same of e_t and e_p, just repeated for every element
     # e_r should be 0 or near 0
-    # %% test the far_field function
+
+    # %% test the element field function
     # define the angles for the far field, discretized in sin(theta) and phi
-    theta = np.linspace(-np.pi / 2, np.pi / 2, 361)
+    theta = np.linspace(-np.pi / 2, np.pi / 2, 21)
     phi = np.ones_like(theta) * 0
+    phi = phi.reshape(-1, 1)
+    theta = theta.reshape(-1, 1)
     # evaluate the far field of the uniform aperture at the local theta and phi coordinates
-    e_t, e_p = uniform_array.far_field(theta, phi)
-    radiatedPower = np.sum(np.abs(exc) ** 2)
+    e_t, e_p = element_aperture.mesh_E_field(theta, phi)
+    radiatedPower = element_aperture.get_radiated_power()
     # plot the gain
     g = np.array(
         2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (120 * np.pi * radiatedPower),
@@ -286,4 +291,62 @@ if __name__ == '__main__':
     fig, ax = plt.subplots(1)
     ax.plot(theta, g)
     plt.show()
-    print("pippo") # todo debug the theoretial efield function. is clearly not working as it should.
+    # plot e_theta
+    fig, ax = plt.subplots(1)
+    ax.plot(theta, np.abs(e_t) * np.sqrt(radiatedPower * element_aperture.eta))
+    ax.plot(theta, np.angle(e_t))
+    plt.show()
+    # plot e_phi
+    fig, ax = plt.subplots(1)
+    ax.plot(theta, np.abs(e_p) * np.sqrt(radiatedPower * element_aperture.eta))
+    ax.plot(theta, np.angle(e_p))
+    plt.show()
+    print("pippo")
+
+    # %% test the theoretical element field function
+
+    # define the angles for the far field, discretized in sin(theta) and phi
+    theta = np.linspace(-np.pi / 2, np.pi / 2, 21)
+    phi = np.ones_like(theta) * 0
+    phi = np.where(theta < 0, (phi - np.pi) % (2 * np.pi), phi)
+    theta = np.abs(theta)
+    # evaluate the far field of the uniform aperture at the local theta and phi coordinates
+    e_t, e_p = element_aperture.mesh_E_field_theor(theta, phi)
+    radiatedPower = element_aperture.get_radiated_power()
+    # plot the gain
+    theta = np.linspace(-np.pi / 2, np.pi / 2, 21)
+    g = np.array(
+        2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (120 * np.pi * radiatedPower),
+        dtype=float)
+    fig, ax = plt.subplots(1)
+    ax.plot(theta, g)
+    plt.show()
+    # plot e_theta
+    fig, ax = plt.subplots(1)
+    ax.plot(theta, np.abs(e_t))
+    ax.plot(theta, np.angle(e_t))
+    plt.show()
+    # plot e_phi
+    fig, ax = plt.subplots(1)
+    ax.plot(theta, np.abs(e_p))
+    ax.plot(theta, np.angle(e_p))
+    plt.show()
+    print("pippo")
+
+    # %% test the array far_field function
+    # define the angles for the far field, discretized in sin(theta) and phi
+    theta = np.linspace(-np.pi / 10, np.pi / 10, 11)
+    phi = np.ones_like(theta) * 0
+    phi = np.where(theta < 0, (phi + np.pi) % (2 * np.pi), phi)
+    theta1 = np.abs(theta)
+    # evaluate the far field of the array aperture at the local theta and phi coordinates
+    e_t, e_p = uniform_array.far_field(theta1, phi)
+    radiatedPower = np.sum(np.abs(exc) ** 2 * uniform_array.element_antenna.get_radiated_power() ** 2)
+    # plot the gain
+    g = np.array(
+        2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (120 * np.pi * radiatedPower),
+        dtype=float)
+    fig, ax = plt.subplots(1)
+    ax.plot(theta, g)
+    plt.show()
+    print("pippo")  # todo debug the theoretial efield function. is clearly not working as it should.

@@ -138,9 +138,9 @@ class Aperture:
 
     def theor_rect_field_transform(self, theta_mesh: np.ndarray, phi_mesh: np.ndarray) -> np.ndarray:
         """
-        generate and return the far field (aperture fourier transform) over a spherical coordinates grid
+        generate and return the scalar far field (aperture fourier transform) over a spherical coordinates grid
         only one linear polarization at a time can be computed. The sources is assumed to be
-        ar rectangular uniform Huygens source
+        ar rectangular uniform Huygens source. [Orfaniidis - Electromagnetic Waves and Antennas - 18.8.1]
         :param theta_mesh: elevation points meshgrid
         :param phi_mesh: azimuth points meshgrid
         :return: matrix containing the theta-phi complex values of the far-field pattern
@@ -149,10 +149,11 @@ class Aperture:
         l_mesh, w_mesh = np.meshgrid(self.l_mesh, self.w_mesh)
         kx = self.k * cos(phi_mesh) * sin(theta_mesh)
         ky = self.k * sin(phi_mesh) * sin(theta_mesh)
-        f = sin(kx * self.L / 2) / (kx * self.L / 2) * sin(ky * self.W / 2) / (ky * self.W / 2) * self.L * self.W
+        f = np.sinc(kx * self.L / 2 / np.pi) * np.sinc(ky * self.W / 2 / np.pi) * self.L * self.W
         # substitute nan with 1
         f = np.where(np.isnan(f), 1, f)
         return theta_mesh, phi_mesh, f
+
 
     def field_transform(self, theta: np.ndarray, phi: np.ndarray, interpolation="simpson",
                         polarization="y") -> np.ndarray:
@@ -344,6 +345,7 @@ class UniformAperture(Aperture):
         :return: E_theta, E_phi
         """
         self.Theta, self.Phi, self.f = self.theor_rect_field_transform(theta_mesh, phi_mesh)
+        self.f *= self.e_amplitude # correct scaling for f theorical
         # obliquity factors for Huygens source, differences in polarization come in the cas e of PEC or PMC apertures
         c_t = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
         c_p = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
