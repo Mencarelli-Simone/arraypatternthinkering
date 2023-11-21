@@ -164,7 +164,7 @@ class ConformalArray:
         # wavenumber absolute value
         self.k = 2 * np.pi * self.f / c
         # excitation factors
-        self.excitations = excitations
+        self.excitations = excitations.reshape(-1)
         # array of element antennas
         self.element_antenna = element_antenna
         # compute and save the second tangential vector from tan and norm
@@ -216,6 +216,14 @@ class ConformalArray:
         # 5 return the electric field in the far field
         return E_t.reshape(original_shape), E_p.reshape(original_shape)
 
+    def radiated_power(self):
+        """
+        Returns the radiated power of the array
+        :return: radiated_power
+        """
+        radiated_power = np.sum(np.abs(self.excitations) ** 2 * self.element_antenna.get_radiated_power())
+        return radiated_power
+
     def near_field(self, theta, phi):
         pass  # don't need it for the moment, might be useful for feed arrays in the future
 
@@ -227,9 +235,9 @@ if __name__ == '__main__':
     # Reference uniform linear array
     lam = 3e8 / 10e9
     # element spacing
-    dx = lam / 2
+    dx = lam / 8
     # number of elements
-    N = 7
+    N = 70
     # x coordinates of the elements
     x = np.arange(N) * dx
     # y coordinates of the elements
@@ -335,13 +343,13 @@ if __name__ == '__main__':
 
     # %% test the array far_field function
     # define the angles for the far field, discretized in sin(theta) and phi
-    theta = np.linspace(-np.pi / 2, np.pi / 2, 361)
+    theta = np.linspace(-np.pi / 2, np.pi / 2, 30601)
     phi = np.ones_like(theta) * 0
     phi = np.where(theta < 0, (phi + np.pi) % (2 * np.pi), phi)
     theta1 = np.abs(theta)
     # evaluate the far field of the array aperture at the local theta and phi coordinates
     e_t, e_p = uniform_array.far_field(theta1, phi)
-    radiatedPower = np.sum(np.abs(exc) ** 2 * uniform_array.element_antenna.get_radiated_power())
+    radiatedPower = uniform_array.radiated_power()
     # plot the gain
     g = np.array(
         2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (uniform_array.element_antenna.eta * radiatedPower),
