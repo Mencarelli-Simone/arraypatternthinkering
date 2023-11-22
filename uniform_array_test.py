@@ -94,7 +94,7 @@ ax.set_title('phi = 0 cut')
 fig.tight_layout()
 plt.show()
 
-#%% phi = 90 cut
+# %% phi = 90 cut
 theta = np.linspace(-np.pi / 2, np.pi / 2, 721)
 phi = np.ones_like(theta) * np.pi / 2
 theta = theta.reshape((-1, 1))
@@ -130,3 +130,130 @@ ax.legend()
 ax.set_title('phi = 90 cut')
 fig.tight_layout()
 plt.show()
+
+# %% 2-d pattern visualisation
+theta = np.linspace(-np.pi / 8, np.pi / 8, 181)
+phi = np.linspace(0, 2 * np.pi, 361)
+T, P = np.meshgrid(theta, phi)
+# compute the pattern for the array
+array_e_t, array_e_p = array.far_field(T, P)
+# normalise the pattern amplitude by the radiation intensity
+array_e_t /= np.sqrt(array.radiated_power() * element.eta)
+array_e_p /= np.sqrt(array.radiated_power() * element.eta)
+# compute the pattern for the equivalent aperture
+aperture_e_t, aperture_e_p = aperture.mesh_E_field_theor(T, P)
+# normalise the pattern amplitude by the radiation intensity
+aperture_e_t /= np.sqrt(aperture.get_radiated_power() * aperture.eta)
+aperture_e_p /= np.sqrt(aperture.get_radiated_power() * aperture.eta)
+
+# plot the patterns
+# theta component array
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(T * np.cos(P), T * np.sin(P), 20 * np.log10(np.abs(array_e_t)), cmap=plt.cm.plasma, vmin=-20, vmax=40,
+                  rasterized=True)
+ax.set_xlabel(r'$\theta\  cos \phi$')
+ax.set_ylabel(r'$\theta\  sin \phi$')
+cbar = fig.colorbar(c, ax=ax, label='[dB]')
+ax.set_title('array E theta')
+fig.tight_layout()
+plt.show()
+# phi component arrat
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(T * np.cos(P), T * np.sin(P), 20 * np.log10(np.abs(array_e_p)), cmap=plt.cm.plasma, vmin=-20, vmax=40,
+                  rasterized=True)
+ax.set_xlabel(r'$\theta\  cos \phi$')
+ax.set_ylabel(r'$\theta\  sin \phi$')
+cbar = fig.colorbar(c, ax=ax, label='[dB]')
+ax.set_title('array E phi')
+fig.tight_layout()
+plt.show()
+# theta component aperture
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(T * np.cos(P), T * np.sin(P), 20 * np.log10(np.abs(aperture_e_t)), cmap=plt.cm.plasma, vmin=-20,
+                  vmax=40, rasterized=True)
+ax.set_xlabel(r'$\theta\  cos \phi$')
+ax.set_ylabel(r'$\theta\  sin \phi$')
+cbar = fig.colorbar(c, ax=ax, label='[dB]')
+ax.set_title('aperture E theta')
+fig.tight_layout()
+plt.show()
+# phi component aperture
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(T * np.cos(P), T * np.sin(P), 20 * np.log10(np.abs(aperture_e_p)), cmap=plt.cm.plasma, vmin=-20,
+                  vmax=40, rasterized=True)
+ax.set_xlabel(r'$\theta\  cos \phi$')
+ax.set_ylabel(r'$\theta\  sin \phi$')
+cbar = fig.colorbar(c, ax=ax, label='[dB]')
+ax.set_title('aperture E phi')
+fig.tight_layout()
+plt.show()
+# %% patterns difference
+diff_theta = array_e_t - aperture_e_t
+diff_phi = array_e_p - aperture_e_p
+# plot the patterns
+# theta component array
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(T * np.cos(P), T * np.sin(P), 20 * np.log10(np.abs(diff_theta)), cmap=plt.cm.plasma, vmin=-1, vmax=1,
+                  rasterized=True)
+ax.set_xlabel(r'$\theta\  cos \phi$')
+ax.set_ylabel(r'$\theta\  sin \phi$')
+cbar = fig.colorbar(c, ax=ax, label='[dB]')
+ax.set_title('diff E theta')
+fig.tight_layout()
+plt.show()
+# phi component arrat
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(T * np.cos(P), T * np.sin(P), 20 * np.log10(np.abs(diff_phi)), cmap=plt.cm.plasma, vmin=-1, vmax=1,
+                  rasterized=True)
+ax.set_xlabel(r'$\theta\  cos \phi$')
+ax.set_ylabel(r'$\theta\  sin \phi$')
+cbar = fig.colorbar(c, ax=ax, label='[dB]')
+ax.set_title('diff E phi')
+fig.tight_layout()
+plt.show()
+
+#%% gain plots
+# compute the gain for the array
+radiatedPower = array.radiated_power()
+g_array = np.array(
+    2 * np.pi * (np.abs(array_e_t) ** 2 + np.abs(array_e_p) ** 2) / (aperture.eta * radiatedPower),
+    dtype=float)
+# compute the gain for the aperture
+g_aperture = np.array(
+    2 * np.pi * (np.abs(aperture_e_t) ** 2 + np.abs(aperture_e_p) ** 2) / (aperture.eta * aperture.get_radiated_power()),
+    dtype=float)
+# plot the gains
+# array
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(T * np.cos(P), T * np.sin(P), 10 * np.log10(g_array), cmap=plt.cm.plasma, vmin=-10, vmax=40,
+                  rasterized=True)
+ax.set_xlabel(r'$\theta\  cos \phi$')
+ax.set_ylabel(r'$\theta\  sin \phi$')
+cbar = fig.colorbar(c, ax=ax, label='[dB]')
+ax.set_title('array gain')
+fig.tight_layout()
+plt.show()
+# aperture
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(T * np.cos(P), T * np.sin(P), 10 * np.log10(g_aperture), cmap=plt.cm.plasma, vmin=-10, vmax=40,
+                  rasterized=True)
+ax.set_xlabel(r'$\theta\  cos \phi$')
+ax.set_ylabel(r'$\theta\  sin \phi$')
+cbar = fig.colorbar(c, ax=ax, label='[dB]')
+ax.set_title('aperture gain')
+fig.tight_layout()
+plt.show()
+# gain difference
+diff_gain = g_array - g_aperture
+# plot the gain difference
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(T * np.cos(P), T * np.sin(P), 10 * np.log10(diff_gain), cmap=plt.cm.plasma, vmin=-300, vmax=10,
+                  rasterized=True)
+ax.set_xlabel(r'$\theta\  cos \phi$')
+ax.set_ylabel(r'$\theta\  sin \phi$')
+cbar = fig.colorbar(c, ax=ax, label='[dB]')
+ax.set_title('gain difference')
+fig.tight_layout()
+plt.show()
+
+

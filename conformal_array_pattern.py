@@ -83,7 +83,7 @@ def far_field_local_to_global_spherical_coordinates(theta_global, phi_global,
     e_p = np.ascontiguousarray(e_phi_local).reshape(-1)
     theta_local = np.ascontiguousarray(theta_local).reshape(-1)
     phi_local = np.ascontiguousarray(phi_local).reshape(-1)
-    phi_local = np.where(theta_local < 0, (phi_local + np.pi) % (2 * np.pi), phi_local) # doesn't change anything
+    phi_local = np.where(theta_local < 0, (phi_local + np.pi) % (2 * np.pi), phi_local)  # doesn't change anything
     theta_local = np.abs(theta_local)
 
     # 1. transform the spherical local coordinates to the cartesian local coordinates vector field
@@ -137,15 +137,15 @@ class ConformalArray:
         """
         Create an Array object, defined by the sources locations and the complex excitations
         :param element_antenna: Aperture object
-        :param points_x: x coordinate of points 1-d real array [m]
-        :param points_y: y coordinate of points 1-d real array [m]
-        :param points_z: z coordinate of points 1-d real array [m]
-        :param norm_x: x coordinate of elements normal vector 1-d real array [m]
-        :param norm_y: y coordinate of elements normal vector 1-d real array [m]
-        :param norm_z: z coordinate of elements normal vector 1-d real array [m]
-        :param tan_x: x coordinate of elements tangential vector 1-d real array [m] set as the x-axis of the individual radiating element
-        :param tan_y: y coordinate of elements tangential vector 1-d real array [m] set as the x-axis of the individual radiating element
-        :param tan_z: z coordinate of elements tangential vector 1-d real array [m] set as the x-axis of the individual radiating element
+        :param points_x: x coordinate of points 1-d or 2-d real array [m]
+        :param points_y: y coordinate of points 1-d or 2-d real array [m]
+        :param points_z: z coordinate of points 1-d or 2-d real array [m]
+        :param norm_x: x coordinate of elements normal vector 1-d or 2-d real array [m]
+        :param norm_y: y coordinate of elements normal vector 1-d or 2-d real array [m]
+        :param norm_z: z coordinate of elements normal vector 1-d or 2-d real array [m]
+        :param tan_x: x coordinate of elements tangential vector 1-d or 2-d real array [m] set as the x-axis of the individual radiating element
+        :param tan_y: y coordinate of elements tangential vector 1-d or 2-d real array [m] set as the x-axis of the individual radiating element
+        :param tan_z: z coordinate of elements tangential vector 1-d or 2-d real array [m] set as the x-axis of the individual radiating element
         :param excitations: complex excitation for each point
         :param frequency: operation frequency [Hz]
         :param c: optional, default 299792458 m/s
@@ -153,6 +153,8 @@ class ConformalArray:
         """
         # frequency value [Hz]
         self.f = frequency
+        # meshgrid shape
+        self.shape = points_x.shape
         # sources location in 3-d cartesian [m,m,m]
         self.points = np.array([points_x.reshape(-1), points_y.reshape(-1), points_z.reshape(-1)])
         # sources broadside normal vector in 3-d cartesian [m,m,m]
@@ -216,6 +218,38 @@ class ConformalArray:
         # 5 return the electric field in the far field
         return E_t.reshape(original_shape), E_p.reshape(original_shape)
 
+    def plot_points(self, ax, args=None):
+        """
+        Plots the points of the array on the specified axis
+        :param ax: axis object
+        :param args: optional, plot arguments
+        :return: nothing
+        """
+        if args is None:
+            args = {}
+        ax.scatter(self.points[0, :], self.points[1, :], self.points[2, :], **args)
+
+    def plot_lcs(self, ax, length=0.01, args=None):
+        """
+        Plots the local coordinate system of each element on the specified axis as quivers
+        :param ax:
+        :param length:
+        :param args:
+        :return:
+        """
+        if args is None:
+            args = {}
+        # plot the local coordinate system
+        ax.quiver(self.points[0, :], self.points[1, :], self.points[2, :],
+                  self.el_x[0, :], self.el_x[1, :], self.el_x[2, :], length=length, color='r', **args)
+        ax.quiver(self.points[0, :], self.points[1, :], self.points[2, :],
+                  self.el_y[0, :], self.el_y[1, :], self.el_y[2, :], length=length, color='g', **args)
+        ax.quiver(self.points[0, :], self.points[1, :], self.points[2, :],
+                  self.el_z[0, :], self.el_z[1, :], self.el_z[2, :], length=length, color='b', **args)
+
+    # should add a MAYAVI compatible plotter equivalent
+    # def set_element_wireframe(self, points_list):
+    # def draw_elements(self, ax, args=None):
     def radiated_power(self):
         """
         Returns the radiated power of the array
