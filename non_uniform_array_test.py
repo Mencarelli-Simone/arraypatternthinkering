@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from conformal_array_pattern import ConformalArray
 from radartools.farField import UniformAperture
 import matplotlib
+import mayavi.mlab as ml
 
 # set pyqt5 render
 matplotlib.use('Qt5Agg')
@@ -88,13 +89,102 @@ array = ConformalArray(element,
                        tan_x, tan_y, tan_z,
                        excitation, freq)
 # plot the geometry in 3d using the embedded functions
-# create 3d fig and axis
-fig, ax = plt.subplots(1, subplot_kw={'projection': '3d'})
-# plot points on ax
-array.plot_points(ax)
-# plot the lcs on ax
-array.plot_lcs(ax, length=dx / 2)
+# # create 3d fig and axis
+# fig, ax = plt.subplots(1, subplot_kw={'projection': '3d'})
+# # plot points on ax
+# array.plot_points(ax)
+# # plot the lcs on ax
+# array.plot_lcs(ax, length=dx / 2)
+# plt.show()
+# ax.set_xlim3d(-1, 1)
+# ax.set_ylim3d(-1, 1)
+# ax.set_zlim3d(0, 2)
+
+# %% elemental wireframe
+wf_x = np.array([-dx / 2, dx / 2, dx / 2, -dx / 2, -dx / 2])
+wf_y = np.array([-dx / 2, -dx / 2, dx / 2, dx / 2, -dx / 2])
+wf_z = np.array([0, 0, 0, 0, 0])
+array.set_element_wireframe(wf_x, wf_y, wf_z)
+# visualize the single element wireframe
+ml.figure(1, bgcolor=(0, 0, 0))
+ml.clf()
+ml.plot3d(wf_x, wf_y, wf_z, color=(1, 1, 1), tube_radius=None)
+# plot the lcs quivers
+ml.quiver3d(0, 0, 0, 1, 0, 0, scale_factor=dx / 2, color=(1, 0, 0))
+ml.quiver3d(0, 0, 0, 0, 1, 0, scale_factor=dx / 2, color=(0, 1, 0))
+ml.quiver3d(0, 0, 0, 0, 0, 1, scale_factor=dx / 2, color=(0, 0, 1))
+
+# %% 3d mayavi visualization
+ml.figure(2, bgcolor=(0, 0, 0))
+ml.clf()
+array.plot_points_mayavi(scale_factor=dx / 10)
+array.plot_lcs_mayavi(length=dx / 2)
+array.draw_elements_mayavi(line_width=1, opacity=1, color=(1, 1, 1))
+# same but with wireframe only
+ml.figure(3, bgcolor=(0, 0, 0))
+ml.clf()
+array.draw_elements_mayavi(line_width=1, opacity=1, color=(1, 1, 1))
+ml.show()
+
+# %% compute the array pattern in the main cut
+# define the cut
+theta = np.linspace(-pi/2, pi/2, 360)
+phi = np.zeros_like(theta)
+# compute the pattern
+e_t, e_p = array.far_field(theta, phi)
+radiatedPower = array.radiated_power()
+# plot the gain
+g_e = np.array(
+    2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (array.element_antenna.eta * radiatedPower),
+    dtype=float)
+# compute the h cut
+phi = np.ones_like(theta) * pi / 2
+# compute the pattern
+e_t, e_p = array.far_field(theta, phi)
+# plot the gain
+g_h = np.array(
+    2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (array.element_antenna.eta * radiatedPower),
+    dtype=float)
+# plot the gain
+fig, ax = plt.subplots(1)
+ax.plot(theta * 180 / pi, 10 * np.log10(g_e), label='e-plane')
+ax.plot(theta * 180 / pi, 10 * np.log10(g_h), label='h-plane')
+ax.set_xlabel('theta [deg]')
+ax.set_ylabel('gain [dB]')
+ax.legend()
+ax.grid()
 plt.show()
-ax.set_xlim3d(-1, 1)
-ax.set_ylim3d(-1, 1)
-ax.set_zlim3d(0, 2)
+
+# %% collimate the beam
+# compute excitations to collimate the beam, compensate the phase for z shift
+exc = np.exp(-1j * 2 * pi * zc_mesh.reshape(-1) / wavelength)
+array.excitations = exc.reshape(-1)
+
+# compute the array pattern in the main cut
+# define the cut
+theta = np.linspace(-pi/2, pi/2, 360)
+phi = np.zeros_like(theta)
+# compute the pattern
+e_t, e_p = array.far_field(theta, phi)
+radiatedPower = array.radiated_power()
+# plot the gain
+g_e = np.array(
+    2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (array.element_antenna.eta * radiatedPower),
+    dtype=float)
+# compute the h cut
+phi = np.ones_like(theta) * pi / 2
+# compute the pattern
+e_t, e_p = array.far_field(theta, phi)
+# plot the gain
+g_h = np.array(
+    2 * np.pi * (np.abs(e_t) ** 2 + np.abs(e_p) ** 2) / (array.element_antenna.eta * radiatedPower),
+    dtype=float)
+# plot the gain
+fig, ax = plt.subplots(1)
+ax.plot(theta * 180 / pi, 10 * np.log10(g_e), label='e-plane')
+ax.plot(theta * 180 / pi, 10 * np.log10(g_h), label='h-plane')
+ax.set_xlabel('theta [deg]')
+ax.set_ylabel('gain [dB]')
+ax.legend()
+ax.grid()
+plt.show()

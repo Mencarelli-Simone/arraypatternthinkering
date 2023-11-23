@@ -9,6 +9,7 @@ import scipy as sp
 from radartools.farField import UniformAperture
 from numba import jit, prange, float64, types, complex128
 from numpy import sin, cos, tan
+import mayavi.mlab as ml
 
 
 # %% functions (for Jit optimization)
@@ -108,7 +109,7 @@ def far_field_local_to_global_spherical_coordinates(theta_global, phi_global,
         R[:, 0] = el_x[:, j]
         R[:, 1] = el_y[:, j]
         R[:, 2] = el_z[:, j]
-
+        # from LCS to GCS no need to transpose. this is verified by the wireframe plot for the elements (uses same R)
         # 4. for every radiation angle:
         for i in prange(original_shape[0]):  # m points (number of radiation angles)
             # 4.1. transform the e field in local cartesian coordinates to the global cartesian coordinates e field
@@ -172,6 +173,8 @@ class ConformalArray:
         # compute and save the second tangential vector from tan and norm
         el_y = np.cross(self.el_z, self.el_x, axis=0)  # right-handed all right
         self.el_y = el_y / np.linalg.norm(el_y, axis=0)
+        # graphic
+        self.element_wireframe = None
 
     def far_field(self, theta, phi):
         """
@@ -218,7 +221,7 @@ class ConformalArray:
         # 5 return the electric field in the far field
         return E_t.reshape(original_shape), E_p.reshape(original_shape)
 
-    def plot_points(self, ax, args=None):
+    def plot_points(self, ax, **args):
         """
         Plots the points of the array on the specified axis
         :param ax: axis object
@@ -229,7 +232,7 @@ class ConformalArray:
             args = {}
         ax.scatter(self.points[0, :], self.points[1, :], self.points[2, :], **args)
 
-    def plot_lcs(self, ax, length=0.01, args=None):
+    def plot_lcs(self, ax, length=0.01, **args):
         """
         Plots the local coordinate system of each element on the specified axis as quivers
         :param ax:
@@ -248,8 +251,116 @@ class ConformalArray:
                   self.el_z[0, :], self.el_z[1, :], self.el_z[2, :], length=length, color='b', **args)
 
     # should add a MAYAVI compatible plotter equivalent
-    # def set_element_wireframe(self, points_list):
-    # def draw_elements(self, ax, args=None):
+    def plot_points_mayavi(self, **args):
+        """
+        Plots the points of the array using MayaVi points3d function
+        :param args:
+        :return:
+        """
+        if args is None:
+            args = {}
+        ml.points3d(self.points[0, :], self.points[1, :], self.points[2, :], **args)
+
+    def plot_lcs_mayavi(self, length=0.01, **args):
+        """
+        Plots the local coordinate system of each element on the specified axis as quivers
+        :param length: versors length
+        :param args:
+        :return:
+        """
+        if args is None:
+            args = {}
+        # plot the local coordinate system
+        a = ml.quiver3d(self.points[0, :], self.points[1, :], self.points[2, :],
+                    self.el_x[0, :], self.el_x[1, :], self.el_x[2, :], scale_factor=length,
+                    color=(1, 0, 0), **args)
+        b = ml.quiver3d(self.points[0, :], self.points[1, :], self.points[2, :],
+                    self.el_y[0, :], self.el_y[1, :], self.el_y[2, :], scale_factor=length,
+                    color=(0, 1, 0), **args)
+        c = ml.quiver3d(self.points[0, :], self.points[1, :], self.points[2, :],
+                    self.el_z[0, :], self.el_z[1, :], self.el_z[2, :], scale_factor=length,
+                    color=(0, 0, 1), **args)
+        return a, b, c
+
+    def set_element_wireframe(self, points_x, points_y, points_z):
+        """
+        Sets the element wireframe for the plot
+        :param points_x: element wireframe edges in lcs x coordinates
+        :param points_y: element wireframe edges in lcs y coordinates
+        :param points_z: element wireframe edges in lcs z coordinates
+        :return:
+        """
+        self.element_wireframe = np.array([points_x, points_y, points_z])
+
+    def draw_elements_mayavi(self, **args):
+        """
+        Draws the elements of the array using MayaVi
+        :param args: passed to ml.pipeline.surface
+        :return:
+        """
+        # adapted from the example "plotting_many_lines.py" from the mayavi documentation
+        # https://docs.enthought.com/mayavi/mayavi/auto/example_plotting_many_lines.html
+        # lists of lines
+        points_x = list()
+        points_y = list()
+        points_z = list()
+        connections = list()
+        # number of points per line
+        N = self.element_wireframe.shape[1]
+        # The index of the current point in the total amount of points
+        index = 0
+        # for every element in the array, apply the transformation matrix to the element wireframe
+        for i in range(self.points.shape[1]):
+            # create the transformation matrix
+            R = np.empty((3, 3))
+            R[:, 0] = self.el_x[:, i]
+            R[:, 1] = self.el_y[:, i]
+            R[:, 2] = self.el_z[:, i]
+            # this is a LCS to GCS transformation matrix
+            # transform the element wireframe, repeat self.points[:, i] for every point in the wireframe
+            x, y, z = R @ self.element_wireframe + np.repeat(self.points[:, i].reshape(-1, 1),
+                                                             self.element_wireframe.shape[1],
+                                                             axis=1)
+            # append the points to the lists
+            points_x.append(x.reshape(-1))
+            points_y.append(y.reshape(-1))
+            points_z.append(z.reshape(-1))
+            # create the connections and append them to the list
+            connections.append(np.vstack(
+                [np.arange(index, index + N - 1.5),
+                 np.arange(index + 1, index + N - .5)]
+            ).T)
+            index += N
+
+        # Now collapse all positions, scalars and connections in big arrays
+        x = np.hstack(points_x)
+        y = np.hstack(points_y)
+        z = np.hstack(points_z)
+        s = np.ones_like(z)
+        connections = np.vstack(connections)
+        # Create the points
+        src = ml.pipeline.scalar_scatter(x, y, z, s)
+        # Connect them
+        src.mlab_source.dataset.lines = connections
+        src.update()
+        # The stripper filter cleans up connected lines
+        lines = ml.pipeline.stripper(src) # this line breaks windows in debug mode
+        # Finally, display the set of lines
+        return ml.pipeline.surface(lines, **args)
+
+    def fill_elements_mayavi(self, parameter = 'angle', **args):
+        """
+        Draws the elements of the array using MayaVi filling the surface using a parametric colormap
+        :param args:
+        :return:
+        """
+        if parameter == 'angle':
+            parameter = np.angle(self.excitations)
+        elif parameter == 'abs':
+            parameter = np.abs(self.excitations)
+        # todo implement mayavi color surface
+        pass
+
     def radiated_power(self):
         """
         Returns the radiated power of the array
