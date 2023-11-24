@@ -85,3 +85,61 @@ mlab.pipeline.surface(lines, colormap='Accent', line_width=1, opacity=.4)
 mlab.view(33.6, 106, 5.5, [0, 0, .05])
 mlab.roll(125)
 mlab.show()
+
+#%%
+import numpy as np
+#set output to qt figures
+#%matplotlib qt
+a = np.random.random((4, 4))
+from mayavi import mlab
+mlab.surf(a)
+mlab.show_pipeline()
+
+#%%
+mlab.show()
+
+#%%
+mlab.figure(1)
+mlab.clf()
+dx = 1
+x = np.array([-dx / 2, dx / 2])
+y = np.array([-dx / 2, dx / 2])
+z = np.array([[0, 0], [0, 0]])
+
+
+surf = mlab.pipeline.surface(src)
+
+mlab.show()
+#%%
+
+
+import numpy as np
+from mayavi.mlab import *
+from numpy import pi, sin, cos, mgrid
+def test_mesh():
+    """A very pretty picture of spherical harmonics translated from
+    the octaviz example."""
+    pi = np.pi
+    cos = np.cos
+    sin = np.sin
+    dphi, dtheta = pi / 250.0, pi / 250.0
+    [phi, theta] = np.mgrid[0:pi + dphi * 1.5:dphi,
+                            0:2 * pi + dtheta * 1.5:dtheta]
+    m0 = 4
+    m1 = 3
+    m2 = 2
+    m3 = 3
+    m4 = 6
+    m5 = 2
+    m6 = 6
+    m7 = 4
+    r = sin(m0 * phi) ** m1 + cos(m2 * phi) ** m3 + \
+        sin(m4 * theta) ** m5 + cos(m6 * theta) ** m7
+    x = r * sin(phi) * cos(theta)
+    y = r * cos(phi)
+    z = r * sin(phi) * sin(theta)
+
+    return mesh(x, y, z, colormap="bone")
+
+a = test_mesh()
+show_pipeline()

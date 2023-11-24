@@ -100,35 +100,10 @@ array = ConformalArray(element,
 # ax.set_ylim3d(-1, 1)
 # ax.set_zlim3d(0, 2)
 
-# %% elemental wireframe
-wf_x = np.array([-dx / 2, dx / 2, dx / 2, -dx / 2, -dx / 2])
-wf_y = np.array([-dx / 2, -dx / 2, dx / 2, dx / 2, -dx / 2])
-wf_z = np.array([0, 0, 0, 0, 0])
-array.set_element_wireframe(wf_x, wf_y, wf_z)
-# visualize the single element wireframe
-ml.figure(1, bgcolor=(0, 0, 0))
-ml.clf()
-ml.plot3d(wf_x, wf_y, wf_z, color=(1, 1, 1), tube_radius=None)
-# plot the lcs quivers
-ml.quiver3d(0, 0, 0, 1, 0, 0, scale_factor=dx / 2, color=(1, 0, 0))
-ml.quiver3d(0, 0, 0, 0, 1, 0, scale_factor=dx / 2, color=(0, 1, 0))
-ml.quiver3d(0, 0, 0, 0, 0, 1, scale_factor=dx / 2, color=(0, 0, 1))
-
-# %% 3d mayavi visualization
-ml.figure(2, bgcolor=(0, 0, 0))
-ml.clf()
-array.plot_points_mayavi(scale_factor=dx / 10)
-array.plot_lcs_mayavi(length=dx / 2)
-array.draw_elements_mayavi(line_width=1, opacity=1, color=(1, 1, 1))
-# same but with wireframe only
-ml.figure(3, bgcolor=(0, 0, 0))
-ml.clf()
-array.draw_elements_mayavi(line_width=1, opacity=1, color=(1, 1, 1))
-ml.show()
 
 # %% compute the array pattern in the main cut
 # define the cut
-theta = np.linspace(-pi/2, pi/2, 360)
+theta = np.linspace(-pi / 2, pi / 2, 360)
 phi = np.zeros_like(theta)
 # compute the pattern
 e_t, e_p = array.far_field(theta, phi)
@@ -160,9 +135,44 @@ plt.show()
 exc = np.exp(-1j * 2 * pi * zc_mesh.reshape(-1) / wavelength)
 array.excitations = exc.reshape(-1)
 
+# %% elemental wireframe
+wf_x = np.array([-dx / 2, dx / 2, dx / 2, -dx / 2, -dx / 2])
+wf_y = np.array([-dx / 2, -dx / 2, dx / 2, dx / 2, -dx / 2])
+wf_z = np.array([0, 0, 0, 0, 0])
+array.set_element_wireframe(wf_x, wf_y, wf_z)
+# visualize the single element wireframe
+ml.figure(1, bgcolor=(0, 0, 0))
+ml.clf()
+ml.plot3d(wf_x, wf_y, wf_z, color=(1, 1, 1), tube_radius=None)
+# plot the lcs quivers
+ml.quiver3d(0, 0, 0, 1, 0, 0, scale_factor=dx / 2, color=(1, 0, 0))
+ml.quiver3d(0, 0, 0, 0, 1, 0, scale_factor=dx / 2, color=(0, 1, 0))
+ml.quiver3d(0, 0, 0, 0, 0, 1, scale_factor=dx / 2, color=(0, 0, 1))
+
+# %% 3d mayavi visualization
+ml.figure(2, bgcolor=(0, 0, 0))
+ml.clf()
+array.plot_points_mayavi(scale_factor=dx / 10)
+array.plot_lcs_mayavi(length=dx / 2)
+array.draw_elements_mayavi(line_width=1, opacity=1, color=(1, 1, 1))
+# same but with wireframe only
+ml.figure(3, bgcolor=(0, 0, 0))
+ml.clf()
+array.draw_elements_mayavi(line_width=1, opacity=1, color=(1, 1, 1))
+# and add colors
+# test surface
+x = np.array([-dx / 2, dx / 2])
+y = np.array([-dx / 2, dx / 2])
+z = np.array([[0, 0], [0, 0]])
+array.set_element_surface(x, y, z)
+# try to call the drawing function this is a bit heavy
+array.draw_element_surfaces_mayavi(mplcmap='rainbow')
+ml.show()
+
+# %%
 # compute the array pattern in the main cut
 # define the cut
-theta = np.linspace(-pi/2, pi/2, 360)
+theta = np.linspace(-pi / 2, pi / 2, 360)
 phi = np.zeros_like(theta)
 # compute the pattern
 e_t, e_p = array.far_field(theta, phi)

@@ -153,6 +153,7 @@ class ConformalArray:
         :return: nothing
         """
         # frequency value [Hz]
+
         self.f = frequency
         # meshgrid shape
         self.shape = points_x.shape
@@ -174,7 +175,10 @@ class ConformalArray:
         el_y = np.cross(self.el_z, self.el_x, axis=0)  # right-handed all right
         self.el_y = el_y / np.linalg.norm(el_y, axis=0)
         # graphic
-        self.element_wireframe = None
+        self.element_wireframe = None  # wireframe for a single element
+        self.element_surface = None  # surface for a single element
+        self.element_surfaces = None  # list of surface objects (mayavi objects)
+        self.element_wires = None  # many lines single mayavi object for rotated elemental wireframes
 
     def far_field(self, theta, phi):
         """
@@ -272,14 +276,14 @@ class ConformalArray:
             args = {}
         # plot the local coordinate system
         a = ml.quiver3d(self.points[0, :], self.points[1, :], self.points[2, :],
-                    self.el_x[0, :], self.el_x[1, :], self.el_x[2, :], scale_factor=length,
-                    color=(1, 0, 0), **args)
+                        self.el_x[0, :], self.el_x[1, :], self.el_x[2, :], scale_factor=length,
+                        color=(1, 0, 0), **args)
         b = ml.quiver3d(self.points[0, :], self.points[1, :], self.points[2, :],
-                    self.el_y[0, :], self.el_y[1, :], self.el_y[2, :], scale_factor=length,
-                    color=(0, 1, 0), **args)
+                        self.el_y[0, :], self.el_y[1, :], self.el_y[2, :], scale_factor=length,
+                        color=(0, 1, 0), **args)
         c = ml.quiver3d(self.points[0, :], self.points[1, :], self.points[2, :],
-                    self.el_z[0, :], self.el_z[1, :], self.el_z[2, :], scale_factor=length,
-                    color=(0, 0, 1), **args)
+                        self.el_z[0, :], self.el_z[1, :], self.el_z[2, :], scale_factor=length,
+                        color=(0, 0, 1), **args)
         return a, b, c
 
     def set_element_wireframe(self, points_x, points_y, points_z):
@@ -344,22 +348,61 @@ class ConformalArray:
         src.mlab_source.dataset.lines = connections
         src.update()
         # The stripper filter cleans up connected lines
-        lines = ml.pipeline.stripper(src) # this line breaks windows in debug mode
+        lines = ml.pipeline.stripper(src)  # this line breaks windows in debug mode
         # Finally, display the set of lines
-        return ml.pipeline.surface(lines, **args)
+        wire = ml.pipeline.surface(lines, **args)
+        self.element_wires = wire
+        return wire
 
-    def fill_elements_mayavi(self, parameter = 'angle', **args):
+    def set_element_surface(self, x, y, scalar):
+        """
+        Sets the element surface for the plot
+        :param x: element surface x coordinates 1-d or 2-d real array [m]
+        :param y: element surface y coordinates 1-d or 2-d real array [m]
+        :param scalar: element surface scalar value 2-d array [m,m]
+        :return:
+        """
+        if x.shape != scalar.shape:
+            x, y = np.meshgrid(x.reshape(-1), y.reshape(-1))
+        self.element_surface = np.array([x, y, scalar])  # this is going to be a 3-d array
+
+    def draw_element_surfaces_mayavi(self, mplcmap='jet', parameter='angle', **args):
         """
         Draws the elements of the array using MayaVi filling the surface using a parametric colormap
         :param args:
         :return:
         """
+        cmap = plt.get_cmap(mplcmap)
         if parameter == 'angle':
-            parameter = np.angle(self.excitations)
+            parameter = (np.angle(self.excitations) % (2 * np.pi)) / (2 * np.pi)
         elif parameter == 'abs':
-            parameter = np.abs(self.excitations)
-        # todo implement mayavi color surface
-        pass
+            parameter = np.abs(self.excitations) / np.max(np.abs(self.excitations))
+
+        # for every element in the array, apply the transformation matrix to the element surface
+        self.element_surfaces = []
+        for i in range(self.points.shape[1]):
+            # create the transformation matrix
+            R = np.empty((3, 3))
+            R[:, 0] = self.el_x[:, i]
+            R[:, 1] = self.el_y[:, i]
+            R[:, 2] = self.el_z[:, i]
+            # this is a LCS to GCS transformation matrix
+            # transform the element surface, repeat self.points[:, i] for every point in the surface
+            sx = self.element_surface[0, :, :].reshape(-1)
+            sy = self.element_surface[1, :, :].reshape(-1)
+            sz = self.element_surface[2, :, :].reshape(-1)
+            shape = self.element_surface[0, :, :].shape
+            x, y, scalar = R @ np.array([sx, sy, sz]) + np.repeat(self.points[:, i].reshape(-1, 1),
+                                                                  sx.shape[0],
+                                                                  axis=1)
+            # create the surface
+            surf = ml.mesh(x.reshape(shape), y.reshape(shape), scalar.reshape(shape),
+                           color=cmap(parameter[i])[0:3], **args)
+            # src = ml.pipeline.array2d_source(x.reshape(shape), y.reshape(shape), scalar.reshape(shape))
+            # surf = ml.pipeline.surface(src,
+            #                     color=cmap(parameter[i])[0:3], **args)
+            self.element_surfaces.append(surf)
+
 
     def radiated_power(self):
         """
