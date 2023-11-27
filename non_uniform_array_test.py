@@ -166,7 +166,7 @@ y = np.array([-dx / 2, dx / 2])
 z = np.array([[0, 0], [0, 0]])
 array.set_element_surface(x, y, z)
 # try to call the drawing function this is a bit heavy
-array.draw_element_surfaces_mayavi(mplcmap='rainbow')
+array.draw_element_surfaces_mayavi(mplcmap='Grays')
 ml.show()
 
 # %%
