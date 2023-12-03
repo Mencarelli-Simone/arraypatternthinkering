@@ -5,13 +5,21 @@
 # %% includes
 import numpy as np
 from numpy import pi, sin, cos, tan, arcsin, exp
+from matplotlib import pyplot as plt
+from mayavi import mlab as ml
+from radartools.utils import meshSph2cart
+# SET PYQT5 RENDER
+import matplotlib
+import mayavi
+
+matplotlib.use('Qt5Agg')
 
 
 # %% Functions
 
 # %% Feed antenna class
 class FeedAntenna():
-    def __init__(self, x, y, z, x_norm, y_norm, z_norm, x_tan, y_tan, z_tan, frequency, c=299792458):
+    def __init__(self, x, y, z, x_norm, y_norm, z_norm, x_tan, y_tan, z_tan, frequency, c=299792458, pol='x'):
         """
         Initialize the feed antenna
 
@@ -26,6 +34,7 @@ class FeedAntenna():
         :param z_tan: z component of the feed antenna tangent local x-axis
         :param frequency: frequency of operation
         :param c: speed of light, optional, default 299792458 m/s
+        :param pol: polarization, optional 'x' or 'y', defined according to Ludwig3 convention for x and y CO-pol
         :return: None
         """
         # frequency of operation
@@ -41,7 +50,9 @@ class FeedAntenna():
         # tangent of the feed antenna
         self.x = np.array([x_tan, y_tan, z_tan])
         # y-axis of the feed antenna
-        self.y = np.cross(self.z_f, self.x_f)
+        self.y = np.cross(self.z, self.x)
+        # polarization
+        self.pol = pol
 
     def e_field(self, r, theta, phi):
         """
@@ -49,14 +60,21 @@ class FeedAntenna():
         :param r: feed local radius
         :param theta: feed local theta
         :param phi: feed local phi
+        :param pol: polarization, 'x' or 'y', defined according to Ludwig3 convention for x and y CO-pol
         :return: e theta e phi
         """
         # dummy unitary amplitude, phase dependent on r
         amplitude = 1
-        phase = exp(-1j * 2 * pi * r / self.wavelength)
-        # x polarization, no dependence on r
-        e_theta = amplitude * phase * cos(phi)
-        e_phi = amplitude * phase * sin(phi)
+        # phase = exp(-1j * 2 * pi * r / self.wavelength)
+        phase = 1
+        if self.pol == 'x':
+            # x polarization, no dependence on r
+            e_theta = amplitude * phase * cos(phi)
+            e_phi = -amplitude * phase * sin(phi)
+        else:
+            # y polarization, no dependence on r
+            e_theta = amplitude * phase * sin(phi)
+            e_phi = amplitude * phase * cos(phi)
         return np.zeros_like(e_theta), e_theta, e_phi
 
     def e_field_cartesian(self, x, y, z):
@@ -107,7 +125,7 @@ class FeedAntenna():
         # rotation matrix from the global to the local
         R = np.array([self.x, self.y, self.z]).T
         # local cartesian coordinates
-        x_lcs, y_lcs, z_lcs = R @ (np.array([x, y, z]) - self.pos)  # todo debug
+        x_lcs, y_lcs, z_lcs = R @ (np.array([x, y, z]) - np.repeat(self.pos.reshape(3, 1), x.shape[0], 1))  # todo debug
         # compute the electric field in the local cartesian system
         e_x, e_y, e_z = self.e_field_cartesian(x_lcs, y_lcs, z_lcs)
         # reshape the output vectors
@@ -115,3 +133,181 @@ class FeedAntenna():
         e_y = e_y.reshape(shape)
         e_z = e_z.reshape(shape)
         return e_x, e_y, e_z
+
+
+# %% Test code
+# main
+if __name__ == "__main__":
+    # %% test the feed antenna
+    # create the feed antenna
+    feed = FeedAntenna(0, 0, 0, 0, 0, 1, 1, 0, 0, 10e9)
+    # create the points on
+    x = np.linspace(-1, 1, 100)
+    y = np.linspace(-1, 1, 100)
+    z = np.linspace(-1, 1, 100)
+    # compute the electric field
+    e_x, e_y, e_z = feed.e_field_gcs(x, y, z)
+    # plot the electric field
+    fig, ax = plt.subplots(1)
+    ax.plot(x, e_x, label="x")
+    ax.plot(x, e_y, label="y")
+    ax.plot(x, e_z, label="z")
+    ax.legend()
+    plt.show()
+    # %% test the feed antenna
+    # create the feed antenna
+    feed = FeedAntenna(0, 0, 0, 0, 0, 1, 1, 0, 0, 10e9)
+    # create the points
+    theta = np.linspace(-pi / 2, pi / 2, 100)
+    phi = np.ones_like(theta) * pi / 2
+    r = np.ones_like(theta)
+    # in cartesian
+    x = r * sin(theta) * cos(phi)
+    y = r * sin(theta) * sin(phi)
+    z = r * cos(theta)
+    # compute the electric field
+    e_x, e_y, e_z = feed.e_field_cartesian(x, y, z)
+    # plot the electric field
+    fig, ax = plt.subplots(1)
+    ax.plot(theta, np.abs(e_x), label="x")
+    ax.plot(theta, np.abs(e_y), label="y")
+    ax.plot(theta, np.abs(e_z), label="z")
+    ax.legend()
+    plt.show()
+    # create the points
+    theta = np.linspace(-pi / 2, pi / 2, 100)
+    phi = np.ones_like(theta) * pi / 10
+    r = np.ones_like(theta)
+    # in cartesian
+    x = r * sin(theta) * cos(phi)
+    y = r * sin(theta) * sin(phi)
+    z = r * cos(theta)
+    # compute the electric field
+    e_x, e_y, e_z = feed.e_field_cartesian(x, y, z)
+    # plot the electric field
+    fig, ax = plt.subplots(1)
+    ax.plot(theta, np.abs(e_x), label="x")
+    ax.plot(theta, np.abs(e_y), label="y")
+    ax.plot(theta, np.abs(e_z), label="z")
+    ax.legend()
+    plt.show()
+    # %% spherical field plot for the isotropic x or y polarized antenna
+    # sphere coordinates
+    theta = np.linspace(0, pi, 19)
+    phi = np.linspace(0, pi*2, 37)
+    # meshgrid
+    theta, phi = np.meshgrid(theta, phi)
+    # convert to cartesian
+    r = 1
+    x = r * sin(theta) * cos(phi)
+    y = r * sin(theta) * sin(phi)
+    z = r * cos(theta)
+    # calculate the electric field
+    feed.pol = 'y'
+    e_x, e_y, e_z = feed.e_field_cartesian(x, y, z)
+    # e_r, e_t, e_p = feed.e_field(np.ones_like(theta), theta, phi)
+    # shape = theta.shape
+    # theta = theta.reshape(-1)
+    # phi = phi.reshape(-1)
+    # # spherical to cartesian transformation matrix
+    # S = np.array([[sin(theta) * cos(phi), cos(theta) * cos(phi), -sin(phi)],
+    #               [sin(theta) * sin(phi), cos(theta) * sin(phi), cos(phi)],
+    #               [cos(theta), -sin(theta), np.zeros_like(theta)]])
+    # theta = theta.reshape(shape)
+    # phi = phi.reshape(shape)
+    # # reshape the electric field
+    # shape = e_r.shape
+    # e_r = e_r.reshape(-1)
+    # e_t = e_t.reshape(-1)
+    # e_p = e_p.reshape(-1)
+    # e_x = np.zeros_like(e_r)
+    # e_y = np.zeros_like(e_r)
+    # e_z = np.zeros_like(e_r)
+    # for i in range(e_r.shape[0]):
+    #     e_x[i], e_y[i], e_z[i] = S[:, :, i] @ np.array([e_r[i], e_t[i], e_p[i]])
+    # print(e_x.shape)
+    # %%
+    # e_x = e_x.reshape(shape)
+    # e_y = e_y.reshape(shape)
+    # e_z = e_z.reshape(shape)
+    # plot using mayavi
+    ml.figure(1)
+    ml.clf()
+    vf = mayavi.tools.pipeline.vector_scatter(x, y, z, e_x, e_y, e_z)
+    ml.pipeline.vectors(vf, mask_points=1, scale_factor=0.08)
+    ml.points3d(x, y, z, mask_points=1, scale_factor=0.01)
+    # plot the gcs
+    ml.quiver3d(0, 0, 0, 1, 0, 0, scale_factor=1, color=(1, 0, 0))
+    ml.quiver3d(0, 0, 0, 0, 1, 0, scale_factor=1, color=(0, 1, 0))
+    ml.quiver3d(0, 0, 0, 0, 0, 1, scale_factor=1, color=(0, 0, 1))
+    #ml.show()
+
+
+    # %% flowlines
+    def flowline(theta_0, phi_0, delta_l, iterations, pol='x'):
+        """
+
+        :param theta_0:
+        :param phi_0:
+        :param delta_l:
+        :param iterations:
+        :param pol:
+        :return: theta and phi coordinates
+        """
+        # init the flowline
+        l = np.zeros([2, iterations])
+        # first element
+        l[:, 0] = np.array([theta_0, phi_0])
+        # delta
+        dl = delta_l
+        # iterate
+        for i in (range(1, iterations - 1)):
+            phi = l[1, i - 1]
+            # compute the new element
+            if pol == 'x':
+                l[:, i] = l[:, i - 1] + dl * np.array([cos(phi), -sin(phi)])
+            else:
+                l[:, i] = l[:, i - 1] + dl * np.array([sin(phi), cos(phi)])
+            # update the delta
+            dl = delta_l / np.sqrt(np.dot((l[:, i] - l[:, i - 1]),(l[:, i] - l[:, i - 1]))) * dl
+            #print(dl, delta_l / np.sqrt(np.dot((l[:, i] - l[:, i - 1]),(l[:, i] - l[:, i - 1]))), delta_l)
+            # if nan
+            if np.isnan(dl).any():
+                dl = delta_l
+
+        return l[0, :], l[1, :]
+
+    # starting point
+
+    pp = -np.linspace(0, pi/2, 18)
+    tt = np.ones_like(pp) * 6 * pi / 19
+    # mayavi plot
+    ml.figure(1)
+    #ml.clf()
+    for i in range(tt.shape[0]):
+        t = tt[i]
+        p = pp[i]
+        # compute the flowline
+        th, ph = flowline(t, p, pi/600, 1000, pol='y')
+        #convert to cartesian
+        r = 1
+        x = r * sin(th) * cos(ph)
+        y = r * sin(th) * sin(ph)
+        z = r * cos(th)
+
+        nodes = ml.plot3d(x[0:800], y[0:800], z[0:800],tube_radius=None)
+        #nodes.glyph.scale_mode = 'scale_by_vector'
+        colors = i * np.ones_like(x)
+        nodes.mlab_source.dataset.point_data.scalars = colors / tt.shape[0]
+    ml.show()
+
+
+    # %% obliquity factor analysis
+    theta = np.linspace(-pi/2, pi/2, 19)
+    of = (1 + cos(theta)) / 2
+    # circular coordinates plot
+    z = of * cos(theta)
+    x = of * sin(theta)
+    # parametric plot
+    fig, ax = plt.subplots(1)
+    ax.plot(x, z)
