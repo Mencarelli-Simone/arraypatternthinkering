@@ -8,7 +8,7 @@ import numpy as np
 import scipy as sp
 from radartools.farField import UniformAperture
 from numba import jit, prange, float64, types, complex128
-from numpy import sin, cos, tan
+from numpy import sin, cos, tan, arcsin, pi
 import mayavi.mlab as ml
 
 
@@ -126,6 +126,93 @@ def far_field_local_to_global_spherical_coordinates(theta_global, phi_global,
 
     return e_r_global, e_theta_global, e_phi_global
 
+
+# %% Functions (general utilities)
+def create_cylindrical_array(length, width, angular_section, dx, freq):
+    """
+    Creates a cylindrical array of uniformly spaced square elements, each one a UniformAperture object
+    the length and width are rounded to the closest approximation, messages are printed to the console.
+    :param length: aperture length [m]
+    :param width: aperture width (circle section chord) [m]
+    :param angular_section: angular section of the cylinder [rad]
+    :param dx: element spacing [m]
+    :param frequency: operation frequency [Hz]
+    :return: ConformalArrayobject, radius of the cylinder
+    """
+    L = length
+    W = width
+    tc = angular_section
+    dc = dx
+    # radius
+    r = W / (sin(tc / 2) * 2)
+    # For the length is easy to define the number of elements
+    # align aperture size to a multiple of dx dy
+    L = np.ceil(L / dx) * dx
+    # number of elements in length
+    Nx = int(L / dx)
+    # make it odd to have a central element
+    if Nx % 2 == 0:
+        Nx += 1
+    # actual length
+    L = Nx * dx
+    # for the width we first find the closest approximation of the number of elements
+    dt = 2 * arcsin(dc / (2 * r))
+    # the number of radial segments is then (defect approximation)
+    Nt = int(tc / dt)
+    # make it odd to have a central element
+    if Nt % 2 == 0:
+        Nt += 1
+    # actual circular section
+    tc = Nt * dt
+    # actual width
+    W = 2 * r * sin(tc / 2)
+    # print actual length and width limiting the number of digits to two after the point
+    print(f'Aperture size: {L:.4f} x {W:.4f} m')
+    # print actual number of elements
+    print(f'Number of elements: {Nx} x {Nt}')
+    # print actual subtended angle and radius
+    print(f'Subtended angle: {tc * 180 / pi :.4f} deg')
+    print(f'Radius: {r:.4f} m')
+
+    # %% Array geometry
+    # 1. location of elements in the array, separating the problem in length and section
+    # length
+    xc = np.arange(0, Nx) * dx - L / 2 + dx / 2
+    # theta
+    t = np.arange(0, Nt) * dt - tc / 2 + dt / 2
+    # xc repeats along the theta axis
+    xc_mesh, t_mesh = np.meshgrid(xc, t)
+    # individual points y and z coordinates
+    yc_mesh = r * sin(t_mesh)
+    zc_mesh = r - r * cos(t_mesh)
+    # 2. radiation normal of the elements in the circular section
+    norm_x = np.zeros_like(t_mesh)
+    # the norm lies in the y-z plane
+    norm_y = -sin(t_mesh)
+    norm_z = cos(t_mesh)
+    # 3. x-axis tangent to the element, i.e. global x-axis
+    tan_x = np.ones_like(t_mesh)
+    tan_y = np.zeros_like(t_mesh)
+    tan_z = np.zeros_like(t_mesh)
+
+    # %% create the array
+    # uniform excitation vector
+    excitation = np.ones_like(t_mesh)
+    # create half wavelength elemental aperture
+    element = UniformAperture(dx, dx, freq)
+    # create the array
+    array = ConformalArray(element,
+                           xc_mesh, yc_mesh, zc_mesh,
+                           norm_x, norm_y, norm_z,
+                           tan_x, tan_y, tan_z,
+                           excitation, freq)
+    # %% set the element wireframe
+    # %% elemental wireframe
+    wf_x = np.array([-dx / 2, dx / 2, dx / 2, -dx / 2, -dx / 2])
+    wf_y = np.array([-dx / 2, -dx / 2, dx / 2, dx / 2, -dx / 2])
+    wf_z = np.array([0, 0, 0, 0, 0])
+    array.set_element_wireframe(wf_x, wf_y, wf_z)
+    return array, r
 
 # %% classes
 class ConformalArray:

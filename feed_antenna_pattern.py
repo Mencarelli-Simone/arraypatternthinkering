@@ -47,12 +47,17 @@ class FeedAntenna():
         self.pos = np.array([x, y, z])
         # radiation normal of the feed antenna
         self.z = np.array([x_norm, y_norm, z_norm])
+        self.z = self.z / np.linalg.norm(self.z)
         # tangent of the feed antenna
         self.x = np.array([x_tan, y_tan, z_tan])
+        self.x = self.x / np.linalg.norm(self.x)
         # y-axis of the feed antenna
         self.y = np.cross(self.z, self.x)
         # polarization
         self.pol = pol
+        # graphics
+        self.feed_wireframe = None
+        self.set_feed_wireframe()
 
     def e_field(self, r, theta, phi):
         """
@@ -134,6 +139,42 @@ class FeedAntenna():
         e_z = e_z.reshape(shape)
         return e_x, e_y, e_z
 
+    # graphics
+    def set_feed_wireframe(self, list_of_arrays=None):
+        """
+        Set the wireframe of the feed antenna
+        :param list_of_arrays: optional list of arrays to draw the wireframe
+        :return:
+        """
+        if list_of_arrays is not None:
+            self.feed_wireframe = list_of_arrays
+        else:
+            self.feed_wireframe = []
+            # square wavelength side
+            a = np.array([[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1], [-1, -1, 1]]) * self.wavelength / 2
+            self.feed_wireframe.append(a)
+            # edges of the pyramid
+            b = np.array([[0, 0, 0], [1, 1, 1]]) * self.wavelength / 2
+            self.feed_wireframe.append(b)
+            c = np.array([[0, 0, 0], [-1, 1, 1]]) * self.wavelength / 2
+            self.feed_wireframe.append(c)
+            d = np.array([[0, 0, 0], [-1, -1, 1]]) * self.wavelength / 2
+            self.feed_wireframe.append(d)
+            e = np.array([[0, 0, 0], [1, -1, 1]]) * self.wavelength / 2
+            self.feed_wireframe.append(e)
+
+    def draw_feed(self, scale=1, **kwargs):
+        """
+        draws the feed antenna in mayavi
+        :return:
+        """
+        # create rotation matrix from the local to the global
+        R = np.array([self.x, self.y, self.z]).T
+        for array in self.feed_wireframe:
+            # apply rotation matrix
+            array = R @ array.T + self.pos.reshape(3, 1)
+            ml.plot3d(array[0, :] * scale, array[1, :] * scale, array[2, :] * scale, tube_radius=None, **kwargs)
+
 
 # %% Test code
 # main
@@ -156,7 +197,7 @@ if __name__ == "__main__":
     plt.show()
     # %% test the feed antenna
     # create the feed antenna
-    feed = FeedAntenna(0, 0, 0, 0, 0, 1, 1, 0, 0, 10e9)
+    feed = FeedAntenna(0, 0, 0, 1/np.sqrt(2), 1/np.sqrt(2), 0, 0, 0, 1, 10e9)
     # create the points
     theta = np.linspace(-pi / 2, pi / 2, 100)
     phi = np.ones_like(theta) * pi / 2
@@ -194,7 +235,7 @@ if __name__ == "__main__":
     # %% spherical field plot for the isotropic x or y polarized antenna
     # sphere coordinates
     theta = np.linspace(0, pi, 19)
-    phi = np.linspace(0, pi*2, 37)
+    phi = np.linspace(0, pi * 2, 37)
     # meshgrid
     theta, phi = np.meshgrid(theta, phi)
     # convert to cartesian
@@ -240,8 +281,9 @@ if __name__ == "__main__":
     ml.quiver3d(0, 0, 0, 1, 0, 0, scale_factor=1, color=(1, 0, 0))
     ml.quiver3d(0, 0, 0, 0, 1, 0, scale_factor=1, color=(0, 1, 0))
     ml.quiver3d(0, 0, 0, 0, 0, 1, scale_factor=1, color=(0, 0, 1))
-    #ml.show()
 
+
+    # ml.show()
 
     # %% flowlines
     def flowline(theta_0, phi_0, delta_l, iterations, pol='x'):
@@ -263,47 +305,56 @@ if __name__ == "__main__":
         # iterate
         for i in (range(1, iterations - 1)):
             phi = l[1, i - 1]
+            theta = l[0, i - 1]
             # compute the new element
             if pol == 'x':
-                l[:, i] = l[:, i - 1] + dl * np.array([cos(phi), -sin(phi)])
+                l[:, i] = l[:, i - 1] + dl * np.array([cos(phi), -sin(phi)]) * np.array(
+                    [1, 1 / sin(theta)])  # normalization for gradient
+                if theta == 0:
+                    l[:, i] = l[:, i - 1] + dl * np.array([cos(phi), -sin(phi)]) * np.array([1, 1])
             else:
-                l[:, i] = l[:, i - 1] + dl * np.array([sin(phi), cos(phi)])
+                l[:, i] = l[:, i - 1] + dl * np.array([sin(phi), cos(phi)]) * np.array([1, 1 / sin(theta)])
+                if theta == 0:
+                    l[:, i] = l[:, i - 1] + dl * np.array([sin(phi), cos(phi)]) * np.array([1, 1])
             # update the delta
-            dl = delta_l / np.sqrt(np.dot((l[:, i] - l[:, i - 1]),(l[:, i] - l[:, i - 1]))) * dl
-            #print(dl, delta_l / np.sqrt(np.dot((l[:, i] - l[:, i - 1]),(l[:, i] - l[:, i - 1]))), delta_l)
+            dl = delta_l / np.sqrt(np.dot((l[:, i] - l[:, i - 1]), (l[:, i] - l[:, i - 1]))) * dl
+            # print(dl, delta_l / np.sqrt(np.dot((l[:, i] - l[:, i - 1]),(l[:, i] - l[:, i - 1]))), delta_l)
             # if nan
             if np.isnan(dl).any():
                 dl = delta_l
 
         return l[0, :], l[1, :]
 
+
     # starting point
 
-    pp = -np.linspace(0, pi/2, 18)
-    tt = np.ones_like(pp) * 6 * pi / 19
+    tt = np.linspace(-pi, pi, 19)
+    # tt = np.linspace(0, pi/2, 10)
+    pp = np.ones_like(tt) * 0
     # mayavi plot
     ml.figure(1)
-    #ml.clf()
+    # ml.clf()
     for i in range(tt.shape[0]):
         t = tt[i]
         p = pp[i]
         # compute the flowline
-        th, ph = flowline(t, p, pi/600, 1000, pol='y')
-        #convert to cartesian
+        th, ph = flowline(t, p, pi / 8000, 30000, pol='y')
+        # convert to cartesian
         r = 1
         x = r * sin(th) * cos(ph)
         y = r * sin(th) * sin(ph)
         z = r * cos(th)
 
-        nodes = ml.plot3d(x[0:800], y[0:800], z[0:800],tube_radius=None)
-        #nodes.glyph.scale_mode = 'scale_by_vector'
+        nodes = ml.plot3d(x[0:-2], y[0:-2], z[0:-2], tube_radius=None)
+        # nodes.glyph.scale_mode = 'scale_by_vector'
         colors = i * np.ones_like(x)
         nodes.mlab_source.dataset.point_data.scalars = colors / tt.shape[0]
     ml.show()
 
+    # the field lines are just circles
 
     # %% obliquity factor analysis
-    theta = np.linspace(-pi/2, pi/2, 19)
+    theta = np.linspace(-pi / 2, pi / 2, 19)
     of = (1 + cos(theta)) / 2
     # circular coordinates plot
     z = of * cos(theta)
@@ -311,3 +362,7 @@ if __name__ == "__main__":
     # parametric plot
     fig, ax = plt.subplots(1)
     ax.plot(x, z)
+
+    # %% test the feed antenna drawing
+    feed.draw_feed(scale=300)
+    ml.show()

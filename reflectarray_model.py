@@ -14,6 +14,11 @@ from numpy import pi, sin, cos, tan, arcsin
 import matplotlib.pyplot as plt
 from conformal_array_pattern import ConformalArray
 from feed_antenna_pattern import FeedAntenna
+from conformal_array_pattern import create_cylindrical_array
+import matplotlib
+import mayavi
+from mayavi import mlab as ml
+matplotlib.use('Qt5Agg')
 
 
 # %% Functions
@@ -94,11 +99,15 @@ class ReflectArray:
             R[:, 2] = self.array.el_z[:, i]
             R = R.T
             # 2.2 compute the local e field
-            Ex_l[i], Ey_l[i], Ez_l[i] = R @ np.array([Ex[i], Ey[i], Ez[i]])
+            Ex_l[i], Ey_l[i], Ez_l[i] = R @ np.array([Ex[i], Ey[i], Ez[i]])  # todo test with some visualisation
         self.Ex_i = Ex_l
         self.Ey_i = Ey_l
         self.Ez_i = Ez_l
         return Ex_l, Ey_l, Ez_l
+
+    def collimate_beam(self, theta_broadside, phi_broadside):
+        # returns the required phase shifts to collimate the beam
+        pass
 
     def compute_reflected_tangential_field(self):
         pass
@@ -114,6 +123,12 @@ class ReflectArray:
 
     # graphics
     def draw_reflectarray(self):
+        # draw the array
+        self.array.draw_elements_mayavi()
+        # draw the feed
+        self.feed.draw_feed(scale=1)
+
+    def draw_tangential_e_field(self):
         pass
 
 
@@ -138,3 +153,37 @@ if __name__ == "__main__":
     gamma = cell.scattering_matrix(theta_inc, phi_inc, phase_shift)
     # print the results liminting the number of decimals
     print('gamma = \n', np.round(gamma, 3))
+
+    # %% RA test incident tangential field computation and visualization
+    # geometry of the test array: cylindirical reflectarray, feed placed at the focus of the cylinder at
+    # half the length of the reflectarray.
+    # antenna parameters
+    freq = 10e9
+    wavelength = 3e8 / freq
+    # elements spacing (square elements)
+    dx = wavelength / 2
+    # aperture size
+    L = 2
+    W = 0.3
+    # circular section angle
+    tc = 90 * pi / 180
+    ## create the array
+    array, radius = create_cylindrical_array(L, W, tc, dx, freq)
+    ## create the feed
+    # position the feed at the focus of the cylinder on the z axis pointing down
+    x = 0
+    y = 0
+    z = radius
+    feed = FeedAntenna(x, y, z, 0, 0, -1, 1, 0, 0, freq)
+    ## create ra cell
+    cell = RACell()
+    # create the reflectarray
+    reflectarray = ReflectArray(cell, feed, array)
+    # display the RA in mayavi
+    ml.figure(2, bgcolor=(0, 0, 0))
+    ml.clf()
+    # draw the array
+    reflectarray.array.draw_elements_mayavi()
+    # draw the feed
+    reflectarray.feed.draw_feed(scale=1)
+    ml.show()
