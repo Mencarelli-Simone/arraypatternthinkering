@@ -133,6 +133,8 @@ class FeedAntenna():
         x_lcs, y_lcs, z_lcs = R @ (np.array([x, y, z]) - np.repeat(self.pos.reshape(3, 1), x.shape[0], 1))  # todo debug
         # compute the electric field in the local cartesian system
         e_x, e_y, e_z = self.e_field_cartesian(x_lcs, y_lcs, z_lcs)
+        # convert the field vectors from the local to the global cartesian system
+        e_x, e_y, e_z = R.T @ np.array([e_x, e_y, e_z])
         # reshape the output vectors
         e_x = e_x.reshape(shape)
         e_y = e_y.reshape(shape)
@@ -175,6 +177,20 @@ class FeedAntenna():
             array = R @ array.T + self.pos.reshape(3, 1)
             ml.plot3d(array[0, :] * scale, array[1, :] * scale, array[2, :] * scale, tube_radius=None, **kwargs)
 
+    def plot_lcs(self, **kwargs):
+        """
+        Plot the local coordinate system of the feed antenna
+        :param kwargs: suggested scale_factor=wavelength
+        :return:
+        """
+        # plot the local coordinate system
+        ml.quiver3d(self.pos[0], self.pos[1], self.pos[2], self.x[0], self.x[1], self.x[2],
+                    color=(1, 0, 0), **kwargs)
+        ml.quiver3d(self.pos[0], self.pos[1], self.pos[2], self.y[0], self.y[1], self.y[2],
+                    color=(0, 1, 0), **kwargs)
+        ml.quiver3d(self.pos[0], self.pos[1], self.pos[2], self.z[0], self.z[1], self.z[2],
+                    color=(0, 0, 1), **kwargs)
+
 
 # %% Test code
 # main
@@ -197,7 +213,7 @@ if __name__ == "__main__":
     plt.show()
     # %% test the feed antenna
     # create the feed antenna
-    feed = FeedAntenna(0, 0, 0, 1/np.sqrt(2), 1/np.sqrt(2), 0, 0, 0, 1, 10e9)
+    feed = FeedAntenna(0, 0, 0, 1 / np.sqrt(2), 1 / np.sqrt(2), 0, 0, 0, 1, 10e9)
     # create the points
     theta = np.linspace(-pi / 2, pi / 2, 100)
     phi = np.ones_like(theta) * pi / 2

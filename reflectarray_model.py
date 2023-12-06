@@ -18,6 +18,7 @@ from conformal_array_pattern import create_cylindrical_array
 import matplotlib
 import mayavi
 from mayavi import mlab as ml
+
 matplotlib.use('Qt5Agg')
 
 
@@ -76,10 +77,14 @@ class ReflectArray:
         self.cell = cell
         self.feed = feed
         self.array = array
-        # incident fields
+        # incident fields gcs
         self.Ex_i = None
         self.Ey_i = None
         self.Ez_i = None
+        # incident fields element by element lcs
+        self.Ex_l = None
+        self.Ey_l = None
+        self.Ez_l = None
 
     def compute_incident_tangential_field(self):
         # This method shall be jitted to run in parallel
@@ -102,9 +107,11 @@ class ReflectArray:
             Ex_l[i], Ey_l[i], Ez_l[i] = R @ np.array([Ex[i], Ey[i], Ez[i]])  # todo test with some visualisation
         self.Ex_i = Ex_l
         self.Ey_i = Ey_l
-        self.Ez_i = Ez_l
+        self.Ez_i = Ez_l# todo fix lcs AND gcs
         return Ex_l, Ey_l, Ez_l
 
+    def compute_elements_angle_of_incidence(self):
+        pass
     def collimate_beam(self, theta_broadside, phi_broadside):
         # returns the required phase shifts to collimate the beam
         pass
@@ -128,8 +135,34 @@ class ReflectArray:
         # draw the feed
         self.feed.draw_feed(scale=1)
 
-    def draw_tangential_e_field(self):
-        pass
+    def draw_tangential_e_field(self, **kwargs):
+        """
+        Draw the tangential electric field on the reflectarray surface for every element
+        it is assumed the incident e field is already computed and stored in the object
+        :param kwargs: mayavi quiver3d kwargs
+        :return:
+        """
+        # initialize global vector field
+        Ex_g = np.zeros_like(self.Ex_i)
+        Ey_g = np.zeros_like(self.Ey_i)
+        Ez_g = np.zeros_like(self.Ez_i)
+        # for every array element
+        for i in range(self.array.points.shape[1]):
+            # compute the local x, y, z e field
+            Ex_l = self.Ex_i[i]
+            Ey_l = self.Ey_i[i]
+            Ez_l = self.Ez_i[i]
+            # transform the local e field in the global frame
+            # create the transformation matrix (same of array.draw_elements_mayavi)
+            R = np.empty((3, 3))
+            R[:, 0] = self.array.el_x[:, i]
+            R[:, 1] = self.array.el_y[:, i]
+            R[:, 2] = self.array.el_z[:, i]
+            # compute the global e field
+            Ex_g[i], Ey_g[i], Ez_g[i] = R @ np.array([Ex_l, Ey_l, Ez_l])
+            # draw the e field with mayavi for every point
+        ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], Ex_g, Ey_g, Ez_g,
+                    **kwargs)
 
 
 # %% test code
@@ -183,7 +216,24 @@ if __name__ == "__main__":
     ml.figure(2, bgcolor=(0, 0, 0))
     ml.clf()
     # draw the array
-    reflectarray.array.draw_elements_mayavi()
+    reflectarray.array.draw_elements_mayavi(color=(.6, .4, 0.1))
     # draw the feed
     reflectarray.feed.draw_feed(scale=1)
+    # draw the feed lcs
+    reflectarray.feed.plot_lcs(scale_factor=0.05)
+    ## test the computation of the incident tangential field and its visualization
+    # compute the incident tangential field
+    # print computing field
+    print('computing incident tangential field... ')
+    #Ex_l, Ey_l, Ez_l = reflectarray.compute_incident_tangential_field()
+    # from the feed antenna pattern
+    Ex_l, Ey_l, Ez_l = feed.e_field_gcs(array.points[0], array.points[1], array.points[2])
+    # store the incident tangential field in the reflectarray object
+    reflectarray.Ex_i = Ex_l
+    reflectarray.Ey_i = Ey_l
+    reflectarray.Ez_i = Ez_l
+    # draw the tangential field
+    print('drawing tangential field...')
+    reflectarray.draw_tangential_e_field(color=(0, 1, 0), scale_factor=0.01)
     ml.show()
+    ## recalculate the tangential field in global coordinates and plot it to compare
