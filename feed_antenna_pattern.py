@@ -70,8 +70,8 @@ class FeedAntenna():
         """
         # dummy unitary amplitude, phase dependent on r
         amplitude = 1
-        # phase = exp(-1j * 2 * pi * r / self.wavelength)
-        phase = 1
+        phase = exp(-1j * 2 * pi * r / self.wavelength)
+        # phase = 1
         if self.pol == 'x':
             # x polarization, no dependence on r
             e_theta = amplitude * phase * cos(phi)
@@ -81,6 +81,7 @@ class FeedAntenna():
             e_theta = amplitude * phase * sin(phi)
             e_phi = amplitude * phase * cos(phi)
         return np.zeros_like(e_theta), e_theta, e_phi
+
 
     def e_field_cartesian(self, x, y, z):
         """
@@ -128,13 +129,13 @@ class FeedAntenna():
         z = z.reshape(-1)
         # from the global cartesian to the local cartesian
         # rotation matrix from the global to the local
-        R = np.array([self.x, self.y, self.z]).T
+        R = np.array([self.x, self.y, self.z])
         # local cartesian coordinates
-        x_lcs, y_lcs, z_lcs = R @ (np.array([x, y, z]) - np.repeat(self.pos.reshape(3, 1), x.shape[0], 1))  # todo debug
+        x_lcs, y_lcs, z_lcs = R.T @ (np.array([x, y, z]) - np.repeat(self.pos.reshape(3, 1), x.shape[0], 1))  # todo debug
         # compute the electric field in the local cartesian system
         e_x, e_y, e_z = self.e_field_cartesian(x_lcs, y_lcs, z_lcs)
         # convert the field vectors from the local to the global cartesian system
-        e_x, e_y, e_z = R.T @ np.array([e_x, e_y, e_z])
+        e_x, e_y, e_z = R @ np.array([e_x, e_y, e_z])
         # reshape the output vectors
         e_x = e_x.reshape(shape)
         e_y = e_y.reshape(shape)
