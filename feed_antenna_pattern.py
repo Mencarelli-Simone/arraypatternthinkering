@@ -59,7 +59,7 @@ class FeedAntenna():
         self.feed_wireframe = None
         self.set_feed_wireframe()
 
-    def e_field(self, r, theta, phi):
+    def e_field(self, r, theta, phi, phase_off=False):
         """
         Compute the electric field radiated by the feed antenna at the specified point
         :param r: feed local radius
@@ -71,6 +71,8 @@ class FeedAntenna():
         # dummy unitary amplitude, phase dependent on r
         amplitude = 1
         phase = exp(-1j * 2 * pi * r / self.wavelength)
+        if phase_off:
+            phase = 1
         # phase = 1
         if self.pol == 'x':
             # x polarization, no dependence on r
@@ -83,7 +85,7 @@ class FeedAntenna():
         return np.zeros_like(e_theta), e_theta, e_phi
 
 
-    def e_field_cartesian(self, x, y, z):
+    def e_field_cartesian(self, x, y, z, phase_off=False):
         """
         Compute the electric field radiated by the feed antenna at the specified point in the local cartesian system
         :param x: lcs x coordinate vector
@@ -102,7 +104,7 @@ class FeedAntenna():
         theta = np.where(r != 0, np.arccos(z / r), 0)
         phi = np.where(r != 0, np.arctan2(y, x), 0)
         # compute the electric field
-        e_r, e_theta, e_phi = self.e_field(r, theta, phi)
+        e_r, e_theta, e_phi = self.e_field(r, theta, phi, phase_off=phase_off)
         # from the local spherical to the local cartesian
         e_x = e_r * sin(theta) * cos(phi) + e_theta * cos(theta) * cos(phi) - e_phi * sin(phi)
         e_y = e_r * sin(theta) * sin(phi) + e_theta * cos(theta) * sin(phi) + e_phi * cos(phi)
@@ -113,7 +115,7 @@ class FeedAntenna():
         e_z = e_z.reshape(shape)
         return e_x, e_y, e_z
 
-    def e_field_gcs(self, x, y, z):
+    def e_field_gcs(self, x, y, z, phase_off=False):
         """
         Compute the electric field radiated by the feed antenna at the specified point in the global cartesian system
         :param x: gcs x coordinate vector
@@ -133,7 +135,7 @@ class FeedAntenna():
         # local cartesian coordinates
         x_lcs, y_lcs, z_lcs = R.T @ (np.array([x, y, z]) - np.repeat(self.pos.reshape(3, 1), x.shape[0], 1))  # todo debug
         # compute the electric field in the local cartesian system
-        e_x, e_y, e_z = self.e_field_cartesian(x_lcs, y_lcs, z_lcs)
+        e_x, e_y, e_z = self.e_field_cartesian(x_lcs, y_lcs, z_lcs, phase_off=phase_off)
         # convert the field vectors from the local to the global cartesian system
         e_x, e_y, e_z = R @ np.array([e_x, e_y, e_z])
         # reshape the output vectors

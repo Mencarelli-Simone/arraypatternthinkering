@@ -88,11 +88,13 @@ class ReflectArray:
         # incidence angle for each element
         self.theta_inc = None
         self.phi_inc = None
+        self.r = None  # distance from the feed to the element
 
-    def compute_incident_tangential_field(self):
+    def compute_incident_tangential_field(self, phase_off=False):
         # This method shall be jitted to run in parallel
         # 1. get global x, y, z e field for each element in the array
-        Ex, Ey, Ez = self.feed.e_field_gcs(self.array.points[0], self.array.points[1], self.array.points[2])
+        Ex, Ey, Ez = self.feed.e_field_gcs(self.array.points[0], self.array.points[1], self.array.points[2],
+                                           phase_off=phase_off)
         # save the gcs incident field
         self.Ex_i = Ex
         self.Ey_i = Ey
@@ -125,6 +127,7 @@ class ReflectArray:
         # initialise the angles
         theta_inc = np.zeros(self.array.points.shape[1])
         phi_inc = np.zeros(self.array.points.shape[1])
+        r = np.zeros(self.array.points.shape[1])
         # compute the angles
         for i in range(self.array.points.shape[1]):
             # convert the feed position in the lcs of the element
@@ -136,9 +139,32 @@ class ReflectArray:
             # compute the feed position in the lcs of the element
             feed_pos_lcs = R.T @ (np.array([self.feed.x, self.feed.y, self.feed.z]) - self.array.points[:, i])
             # convert to spherical coordinates
-            theta_inc[i] = arcsin(feed_pos_lcs[2] / np.linalg.norm(feed_pos_lcs))
-            phi_inc[i] = np.arctan2(feed_pos_lcs[1], feed_pos_lcs[0])
-    def collimate_beam(self, theta_broadside, phi_broadside):
+            r[i] = np.linalg.norm(feed_pos_lcs)
+            theta_inc[i] = np.where(r != 0, np.arccos(feed_pos_lcs[2] / r), 0)
+            phi_inc[i] = np.where(r != 0, np.arctan2(feed_pos_lcs[1], feed_pos_lcs[0]), 0)
+        self.theta_inc = theta_inc
+        self.phi_inc = phi_inc
+        self.r = r
+        return theta_inc, phi_inc, r
+
+    def collimate_beam(self, theta_broadside, phi_broadside, polarization='x', phase_shift_offset=0):
+        """
+        Compute the phase shifts required to collimate the beam in the direction of theta_broadside, phi_broadside
+        :param theta_broadside:
+        :param phi_broadside:
+        :param polarization: component of the elemental incident field to be collimated
+        :param phase_shift_offset: optional, fixed phase shift offset to be added to the phase shifts 0-2pi
+        :return:
+        """
+        # get the electric field phase for each element desired polarization
+        phase = np.angle(self.Ex_i) if polarization == 'x' else np.angle(self.Ey_i)
+        # compute the desired aperture phase shift
+        # 1: find the reference plane for the incident field(theta phi) and make it intersect with the origin
+        # 1.1: find the normal to the plane from theta phi
+        norm = np.array([sin(theta_broadside) * cos(phi_broadside), sin(theta_broadside) * sin(phi_broadside),
+                         cos(theta_broadside)])
+        # 2: find the distance between the plane and each element using the matrix product point coordinate- norm
+        d = np.abs(np.dot(self.array.points.T, norm))
         # returns the required phase shifts to collimate the beam
         pass
 
@@ -161,16 +187,23 @@ class ReflectArray:
         # draw the feed
         self.feed.draw_feed(scale=1)
 
-    def draw_tangential_e_field(self, **kwargs):
+    def draw_tangential_e_field(self, phase_color=False, **kwargs):
         """
         Draw the tangential electric field on the reflectarray surface for every element
-        it is assumed the incident e field is already computed and stored in 1
         :param kwargs: mayavi quiver3d kwargs
         :return:
         """
-        # draw the e field with mayavi for every point
-        ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], np.abs(self.Ex_i),
-                    np.abs(self.Ey_i), np.abs(self.Ez_i), **kwargs)
+        # recomputes the incident tangential field using gcs method of feed, with phase off option
+        Ex_i, Ey_i, Ez_i = self.feed.e_field_gcs(self.array.points[0], self.array.points[1], self.array.points[2],
+                                                 phase_off=True)
+        if phase_color == False:
+            # draw the e field with mayavi for every point
+            ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], Ex_i,
+                        Ey_i, Ez_i, **kwargs)
+        else:
+            obj = ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], Ex_i,
+                              Ey_i, Ez_i, scalars=np.angle(self.Ex_i), scale_mode='none', **kwargs)
+            obj.glyph.color_mode = 'color_by_scalar'
 
 
 # %% test code
@@ -204,7 +237,7 @@ if __name__ == "__main__":
     # elements spacing (square elements)
     dx = wavelength / 2
     # aperture size
-    L = 2
+    L = 1
     W = 0.3
     # circular section angle
     tc = 90 * pi / 180
@@ -214,7 +247,7 @@ if __name__ == "__main__":
     # position the feed at the focus of the cylinder on the z axis pointing down
     x = 0
     y = 0
-    z = 1  # m
+    z = 0.5  # m
     feed = FeedAntenna(x, y, z, 0, 0, -1, 1, 0, 0, freq)
     ## create ra cell
     cell = RACell()
@@ -236,25 +269,29 @@ if __name__ == "__main__":
     Ex_l, Ey_l, Ez_l = reflectarray.compute_incident_tangential_field()
     # draw the tangential field
     print('drawing tangential field...')
-    reflectarray.draw_tangential_e_field(color=(0, 1, 0), scale_factor=0.01)
+    reflectarray.draw_tangential_e_field(phase_color=False, color=(0, 1, 0), scale_factor=dx)
     ml.show()
-    # # %% recalculate the tangential field in global coordinates and plot it to compare
-    # # initialize the global vector field
-    # Ex_g = np.zeros_like(Ex_l)
-    # Ey_g = np.zeros_like(Ey_l)
-    # Ez_g = np.zeros_like(Ez_l)
-    # for i in range(array.points.shape[1]):
-    #     # transform the local e field in the global frame
-    #     # create the transformation matrix (same of array.draw_elements_mayavi)
-    #     R = np.empty((3, 3))
-    #     R[:, 0] = array.el_x[:, i]
-    #     R[:, 1] = array.el_y[:, i]
-    #     R[:, 2] = array.el_z[:, i]
-    #     # compute the global e field
-    #     Ex_g[i], Ey_g[i], Ez_g[i] = R @ np.array([Ex_l[i], Ey_l[i], Ez_l[i]])
-    #
-    # # draw the tangential field
-    # obj = ml.quiver3d(array.points[0, :], array.points[1, :], array.points[2, :], np.abs(Ex_g), np.abs(Ey_g), np.abs(Ez_g),
-    #             scalars=np.angle(Ex_g), colormap='hsv', scale_mode='none', scale_factor=0.01)
-    # obj.glyph.color_mode = 'color_by_scalar'
-    # ml.show()
+    # %% recalculate the tangential field in global coordinates and plot it to compare
+    # initialize the global vector field
+    Ex_l, Ey_l, Ez_l = reflectarray.compute_incident_tangential_field(phase_off=True)
+    Ex_g = np.zeros_like(Ex_l)
+    Ey_g = np.zeros_like(Ey_l)
+    Ez_g = np.zeros_like(Ez_l)
+    for i in range(array.points.shape[1]):
+        # transform the local e field in the global frame
+        # create the transformation matrix (same of array.draw_elements_mayavi)
+        R = np.empty((3, 3))
+        R[:, 0] = array.el_x[:, i]
+        R[:, 1] = array.el_y[:, i]
+        R[:, 2] = array.el_z[:, i]
+        # compute the global e field
+        Ex_g[i], Ey_g[i], Ez_g[i] = R @ np.array([Ex_l[i], Ey_l[i], Ez_l[i]])
+
+    Ex_l, Ey_l, Ez_l = reflectarray.compute_incident_tangential_field(phase_off=False)
+    # draw the tangential field
+    obj = ml.quiver3d(array.points[0, :], array.points[1, :], array.points[2, :], Ex_g, Ey_g,
+                      Ez_g,
+                      scalars=np.angle(reflectarray.Ex_i), colormap='hsv', scale_mode='none', scale_factor=dx,
+                      mode='arrow')
+    obj.glyph.color_mode = 'color_by_scalar'
+    ml.show()
