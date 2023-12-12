@@ -212,6 +212,8 @@ def create_cylindrical_array(length, width, angular_section, dx, freq):
     wf_y = np.array([-dx / 2, -dx / 2, dx / 2, dx / 2, -dx / 2])
     wf_z = np.array([0, 0, 0, 0, 0])
     array.set_element_wireframe(wf_x, wf_y, wf_z)
+    # %% element surface
+    # create the surface
     return array, r
 
 # %% classes
@@ -460,10 +462,14 @@ class ConformalArray:
         :return:
         """
         cmap = plt.get_cmap(mplcmap)
-        if parameter == 'angle':
-            parameter = (np.angle(self.excitations) % (2 * np.pi)) / (2 * np.pi)
-        elif parameter == 'abs':
-            parameter = np.abs(self.excitations) / np.max(np.abs(self.excitations))
+        # if parameter is an array
+        if isinstance(parameter, np.ndarray):
+            parameter = parameter.reshape(-1)
+        else:
+            if parameter == 'angle':
+                parameter = (np.angle(self.excitations) % (2 * np.pi)) / (2 * np.pi)
+            elif parameter == 'abs':
+                parameter = np.abs(self.excitations) / np.max(np.abs(self.excitations))
 
         # for every element in the array, apply the transformation matrix to the element surface
         self.element_surfaces = []

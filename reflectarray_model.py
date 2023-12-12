@@ -43,8 +43,8 @@ class RACell:
         This method shall be the interface to the cell database for the RA object
         :param theta_inc: theta incidence angle LCS of the element, single value or [N]
         :param phi_inc: phi incidence angle LCS of the element, same length of theta_inc
-        :param phase_shift: phase shift of the element  single value or [N]
-        :return: scattering matrix [2,2,N]
+        :param phase_shift: phase shift of the element  single value or [N] 1-d!
+        :return: scattering matrix [N,2,2]
         """
         # for the ideal element the scattering matrix is a diagonal matrix with the phase shift
         # on the diagonal corresponding to the input parameter
@@ -53,9 +53,9 @@ class RACell:
             length = 1
         else:
             length = len(phase_shift)
-        gamma = np.zeros([2, 2, length], dtype=complex)
-        gamma[0, 0, :] = np.exp(1j * phase_shift)
-        gamma[1, 1, :] = np.exp(1j * phase_shift)
+        gamma = np.zeros([length, 2, 2], dtype=complex)
+        gamma[:, 0, 0] = np.exp(1j * phase_shift)
+        gamma[:, 1, 1] = np.exp(1j * phase_shift)
         # the reflected field is to be calculated according to [1] eq. 4.12
         # | Erx |   | gamma_11 gamma_12 | | Eix |
         # |     | = |                   | |     |
@@ -85,10 +85,41 @@ class ReflectArray:
         self.Ex_l = None
         self.Ey_l = None
         self.Ez_l = None
+        # tangential reflected fields lcs
+        self.Ex_r = None
+        self.Ey_r = None
         # incidence angle for each element
         self.theta_inc = None
         self.phi_inc = None
         self.r = None  # distance from the feed to the element
+        # phase shifts of the elements
+        self.phase_shift = None
+        # complex excitation of the array elements
+        # x component
+        self.Ex = None
+        # and y component
+        self.Ey = None
+        # collimation direction
+        self.theta_broadside = None
+        self.phi_broadside = None
+
+    def __update__(self, collimate=True):
+        """
+        Update the reflectarray model
+        :return:
+        """
+        # compute the incident tangential field
+        self.compute_incident_tangential_field()
+        # collimate the beam
+        if collimate:
+            if self.theta_broadside is None:
+                self.collimate_beam(0, 0)
+            else:
+                self.collimate_beam(self.theta_broadside, self.phi_broadside)
+        # compute the elements angle of incidence
+        self.compute_elements_angle_of_incidence()
+        # compute the reflected tangential field
+        self.compute_reflected_tangential_field()
 
     def compute_incident_tangential_field(self, phase_off=False):
         # This method shall be jitted to run in parallel
@@ -128,6 +159,8 @@ class ReflectArray:
         theta_inc = np.zeros(self.array.points.shape[1])
         phi_inc = np.zeros(self.array.points.shape[1])
         r = np.zeros(self.array.points.shape[1])
+        # initialize feed pos lcs
+        feed_pos_lcs = np.zeros_like(self.array.points)
         # compute the angles
         for i in range(self.array.points.shape[1]):
             # convert the feed position in the lcs of the element
@@ -137,11 +170,11 @@ class ReflectArray:
             R[:, 1] = self.array.el_y[:, i]
             R[:, 2] = self.array.el_z[:, i]
             # compute the feed position in the lcs of the element
-            feed_pos_lcs = R.T @ (np.array([self.feed.x, self.feed.y, self.feed.z]) - self.array.points[:, i])
-            # convert to spherical coordinates
-            r[i] = np.linalg.norm(feed_pos_lcs)
-            theta_inc[i] = np.where(r != 0, np.arccos(feed_pos_lcs[2] / r), 0)
-            phi_inc[i] = np.where(r != 0, np.arctan2(feed_pos_lcs[1], feed_pos_lcs[0]), 0)
+            feed_pos_lcs[:, i] = R.T @ (self.feed.pos - self.array.points[:, i])
+        # convert to spherical coordinates
+        r = np.linalg.norm(feed_pos_lcs, axis=0)
+        theta_inc = np.where(r != 0, np.arccos(feed_pos_lcs[2, :] / r), 0)
+        phi_inc = np.where(r != 0, np.arctan2(feed_pos_lcs[1, :], feed_pos_lcs[0, :]), 0)
         self.theta_inc = theta_inc
         self.phi_inc = phi_inc
         self.r = r
@@ -164,20 +197,80 @@ class ReflectArray:
         norm = np.array([sin(theta_broadside) * cos(phi_broadside), sin(theta_broadside) * sin(phi_broadside),
                          cos(theta_broadside)])
         # 2: find the distance between the plane and each element using the matrix product point coordinate- norm
-        d = np.abs(np.dot(self.array.points.T, norm))
+        d = self.array.points.T @ norm
+        # 3: compute the phase shift for the collimated beam
+        desired_phase = -2 * pi * d / self.feed.wavelength
+        # 4: required phase shift offset
+        required_phase_shift = (desired_phase - phase + phase_shift_offset) % (2 * pi)
         # returns the required phase shifts to collimate the beam
-        pass
+        self.phase_shift = required_phase_shift
+        # save the collimation direction
+        self.theta_broadside = theta_broadside
+        self.phi_broadside = phi_broadside
+        return required_phase_shift
 
     def compute_reflected_tangential_field(self):
+        """"
+        Call the methods of the cell model to compute the reflected tangential field
+        has to be called after compute_incident_tangential_field and compute_elements_angle_of_incidence
+        these are to be utilised directly to find the reflected field
+        :return: Erx, Ery: reflected tangential field LCS of the elements
+
+        """
+        # initialise the reflected field
+        Ex_r = np.zeros_like(self.Ex_i)
+        Ey_r = np.zeros_like(self.Ey_i)
+        # compute the scattering matrix
+        gamma = self.cell.scattering_matrix(self.theta_inc, self.phi_inc, self.phase_shift)
+        # shape correctly the incident field vectors [N,2] (lcs of the elements)
+        Ei = np.vstack((self.Ex_l, self.Ey_l)).T  # todo test (if ey is 0 eyr should be 0 too)
+        # compute the reflected field, matrix stacks multiplications
+        Er = gamma @ Ei.reshape(-1, 2, 1)
+        self.Ex_r = Er[:, 0]
+        self.Ey_r = Er[:, 1]
+        return Er[:, 0], Er[:, 1]
+
+    def far_field(self, theta, phi):
+        """
+        Compute the far field of the reflectarray
+        has to be called after compute_reflected_tangential_field
+        :param theta: polar angle
+        :param phi: azimuthal angle
+        :return: far field E_theta, E_phi
+        """
+        # x component
+        # 1. set the complex excitation of the elements as the reflected field
+        self.array.excitations = self.Ex_r
+        # 2. compute the far field
+        Etheta_x, Ephi_x = self.array.far_field(theta, phi)
+        # y component
+        # 1. set the complex excitation of the elements as the reflected field
+        self.array.excitations = self.Ey_r
+        # 2. compute the far field
+        Etheta_y, Ephi_y = self.array.far_field(theta, phi)
+        # sum the components
+        Etheta = Etheta_x + Etheta_y
+        Ephi = Ephi_x + Ephi_y
+        return Etheta, Ephi
+
+    def co_pol(self, theta, phi, polarization='x'):
+        """
+        extracts the co polarized component of the far field Ludwig3 definition
+        :param theta:
+        :param phi:
+        :param polarization:
+        :return:
+        """
         pass
 
-    def excite_conformal_array(self):
-        pass
-
-    def co_pol(self, theta, phi):
-        pass
-
-    def cross_pol(self, theta, phi):
+    def cross_pol(self, theta, phi, polarization='x'):
+        """
+        extracts the cross polarized component of the far field Ludwig3 definition
+        :param theta:
+        :param phi:
+        :param polarization:
+        :return:
+        """
         pass
 
     # graphics
@@ -188,6 +281,24 @@ class ReflectArray:
         self.feed.draw_feed(scale=1)
 
     def draw_tangential_e_field(self, phase_color=False, **kwargs):
+        """
+        Draw the tangential electric field on the reflectarray surface for every element
+        :param kwargs: mayavi quiver3d kwargs
+        :return:
+        """
+        # recomputes the incident tangential field using gcs method of feed, with phase off option
+        Ex_i, Ey_i, Ez_i = self.feed.e_field_gcs(self.array.points[0], self.array.points[1], self.array.points[2],
+                                                 phase_off=True)
+        if phase_color == False:
+            # draw the e field with mayavi for every point
+            ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], Ex_i,
+                        Ey_i, Ez_i, **kwargs)
+        else:
+            obj = ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], Ex_i,
+                              Ey_i, Ez_i, scalars=np.angle(self.Ex_i), scale_mode='none', **kwargs)
+            obj.glyph.color_mode = 'color_by_scalar'
+
+    def draw_reflected_tangential_e_field(self, phase_color=False, **kwargs):
         """
         Draw the tangential electric field on the reflectarray surface for every element
         :param kwargs: mayavi quiver3d kwargs
@@ -294,4 +405,20 @@ if __name__ == "__main__":
                       scalars=np.angle(reflectarray.Ex_i), colormap='hsv', scale_mode='none', scale_factor=dx,
                       mode='arrow')
     obj.glyph.color_mode = 'color_by_scalar'
+    ml.show()
+
+    # %% RA test COLLIMATION AND reflected tangential field computation and visualization
+    # call the update function
+    reflectarray.__update__()
+    # redraw the reflectarray mayavi
+    ml.figure(2, bgcolor=(0, 0, 0))
+    ml.clf()
+    # draw the array
+    reflectarray.array.draw_elements_mayavi(color=(.6, .4, 0.1))
+    # draw the feed
+    reflectarray.feed.draw_feed(scale=1)
+    # draw the feed lcs
+    reflectarray.feed.plot_lcs(scale_factor=0.05)
+    # draw the surface phase shifts
+    reflectarray.array.draw_element_surfaces_mayavi(parameter=reflectarray.phase_shift)
     ml.show()

@@ -130,8 +130,11 @@ class FeedAntenna():
         y = y.reshape(-1)
         z = z.reshape(-1)
         # from the global cartesian to the local cartesian
-        # rotation matrix from the global to the local
-        R = np.array([self.x, self.y, self.z])
+        # rotation matrix from the local to the global
+        R = np.empty([3, 3])
+        R[:, 0] = self.x
+        R[:, 1] = self.y
+        R[:, 2] = self.z
         # local cartesian coordinates
         x_lcs, y_lcs, z_lcs = R.T @ (np.array([x, y, z]) - np.repeat(self.pos.reshape(3, 1), x.shape[0], 1))  # todo debug
         # compute the electric field in the local cartesian system
@@ -206,7 +209,7 @@ if __name__ == "__main__":
     y = np.linspace(-1, 1, 100)
     z = np.linspace(-1, 1, 100)
     # compute the electric field
-    e_x, e_y, e_z = feed.e_field_gcs(x, y, z)
+    e_x, e_y, e_z = feed.e_field_gcs(x, y, z, phase_off=True)
     # plot the electric field
     fig, ax = plt.subplots(1)
     ax.plot(x, e_x, label="x")
@@ -226,7 +229,7 @@ if __name__ == "__main__":
     y = r * sin(theta) * sin(phi)
     z = r * cos(theta)
     # compute the electric field
-    e_x, e_y, e_z = feed.e_field_cartesian(x, y, z)
+    e_x, e_y, e_z = feed.e_field_cartesian(x, y, z, phase_off=True)
     # plot the electric field
     fig, ax = plt.subplots(1)
     ax.plot(theta, np.abs(e_x), label="x")
@@ -243,7 +246,7 @@ if __name__ == "__main__":
     y = r * sin(theta) * sin(phi)
     z = r * cos(theta)
     # compute the electric field
-    e_x, e_y, e_z = feed.e_field_cartesian(x, y, z)
+    e_x, e_y, e_z = feed.e_field_cartesian(x, y, z, phase_off=True)
     # plot the electric field
     fig, ax = plt.subplots(1)
     ax.plot(theta, np.abs(e_x), label="x")
@@ -264,7 +267,7 @@ if __name__ == "__main__":
     z = r * cos(theta)
     # calculate the electric field
     feed.pol = 'y'
-    e_x, e_y, e_z = feed.e_field_cartesian(x, y, z)
+    e_x, e_y, e_z = feed.e_field_cartesian(x, y, z, phase_off=True)
     # e_r, e_t, e_p = feed.e_field(np.ones_like(theta), theta, phi)
     # shape = theta.shape
     # theta = theta.reshape(-1)
@@ -385,3 +388,35 @@ if __name__ == "__main__":
     # %% test the feed antenna drawing
     feed.draw_feed(scale=300)
     ml.show()
+
+    #%% Test the feed antenna in the global cartesian system
+    # create the feed antenna
+    feed = FeedAntenna(0, 0, 0, 0, 1/np.sqrt(2), 1/np.sqrt(2), 1, 0, 0, 10e9)
+    # create the points
+    # sphere coordinates
+    theta = np.linspace(0, pi, 19)
+    phi = np.linspace(0, pi * 2, 37)
+    # meshgrid
+    theta, phi = np.meshgrid(theta, phi)
+    r = np.ones_like(theta)
+    # in cartesian
+    x = r * sin(theta) * cos(phi)
+    y = r * sin(theta) * sin(phi)
+    z = r * cos(theta)
+    # from lcs to gcs
+    R = np.empty([3, 3])
+    R[:, 0] = feed.x # the lcs vectors appear as columns
+    R[:, 1] = feed.y
+    R[:, 2] = feed.z
+    x, y, z = R @ np.array([x.reshape(-1), y.reshape(-1), z.reshape(-1)])
+    # compute the electric field
+    e_x, e_y, e_z = feed.e_field_gcs(x, y, z, phase_off=True)
+    # plot the electric field quivers mayavi
+    ml.figure(2)
+    ml.clf()
+    ml.quiver3d(x, y, z, e_x, e_y, e_z, mask_points=1, scale_factor=0.1)
+    # plot the feed antenna axes
+    feed.plot_lcs(scale_factor=0.1)
+    # plot the feed antenna
+    feed.draw_feed(scale=1)
+    ml.show() # PASS
