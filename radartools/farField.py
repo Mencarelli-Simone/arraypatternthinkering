@@ -353,7 +353,7 @@ class UniformAperture(Aperture):
         if polarization == "x":
             E_theta = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_t * (self.f * np.cos(self.Phi))
             E_phi = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_p * (- self.f * np.sin(self.Phi))
-        if polarization == "y":
+        elif polarization == "y":
             E_theta = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_t * (self.f * np.sin(self.Phi))
             E_phi = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_p * (self.f * np.cos(self.Phi))
         else:

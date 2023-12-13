@@ -10,6 +10,7 @@ from radartools.farField import UniformAperture
 from numba import jit, prange, float64, types, complex128
 from numpy import sin, cos, tan, arcsin, pi
 import mayavi.mlab as ml
+import mayavi
 
 
 # %% functions (for Jit optimization)
@@ -214,7 +215,12 @@ def create_cylindrical_array(length, width, angular_section, dx, freq):
     array.set_element_wireframe(wf_x, wf_y, wf_z)
     # %% element surface
     # create the surface
+    x = np.array([-dx / 2, dx / 2])
+    y = np.array([-dx / 2, dx / 2])
+    z = np.array([[0, 0], [0, 0]])
+    array.set_element_surface(x, y, z)
     return array, r
+
 
 # %% classes
 class ConformalArray:
@@ -258,6 +264,9 @@ class ConformalArray:
         self.k = 2 * np.pi * self.f / c
         # excitation factors
         self.excitations = excitations.reshape(-1)
+        # elements polarization for the elements far field retrieval, all the elements are assumed to be
+        # equally polarized. excitations for the x and y components can be applied separately and the far fields summed.
+        self.polarization = 'x'
         # array of element antennas
         self.element_antenna = element_antenna
         # compute and save the second tangential vector from tan and norm
@@ -295,7 +304,7 @@ class ConformalArray:
         theta_local, phi_local = far_field_global_to_local_spherical_coordinates(theta, phi,
                                                                                  self.el_x, self.el_y, self.el_z)
         # 2. compute the far field of the individual elements
-        E_theta, E_phi = self.element_antenna.mesh_E_field_theor(theta_local, phi_local)
+        E_theta, E_phi = self.element_antenna.mesh_E_field_theor(theta_local, phi_local, polarization=self.polarization)
         # 2.1 transform the far field to the global spherical coordinates
         E_r, E_theta, E_phi = far_field_local_to_global_spherical_coordinates(theta, phi, theta_local, phi_local,
                                                                               self.el_x, self.el_y, self.el_z,
@@ -473,6 +482,7 @@ class ConformalArray:
 
         # for every element in the array, apply the transformation matrix to the element surface
         self.element_surfaces = []
+
         for i in range(self.points.shape[1]):
             # create the transformation matrix
             R = np.empty((3, 3))
@@ -495,7 +505,7 @@ class ConformalArray:
             # surf = ml.pipeline.surface(src,
             #                     color=cmap(parameter[i])[0:3], **args)
             self.element_surfaces.append(surf)
-
+        return self.element_surfaces
 
     def radiated_power(self):
         """

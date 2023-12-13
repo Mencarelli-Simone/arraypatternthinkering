@@ -241,9 +241,13 @@ class ReflectArray:
         # x component
         # 1. set the complex excitation of the elements as the reflected field
         self.array.excitations = self.Ex_r
+        # set the elements polarisation to x
+        self.array.polarization = "x"
         # 2. compute the far field
         Etheta_x, Ephi_x = self.array.far_field(theta, phi)
         # y component
+        # set the elements polarisation to y
+        self.array.polarization = "y"
         # 1. set the complex excitation of the elements as the reflected field
         self.array.excitations = self.Ey_r
         # 2. compute the far field
@@ -304,16 +308,29 @@ class ReflectArray:
         :param kwargs: mayavi quiver3d kwargs
         :return:
         """
+        self.__update__()
         # recomputes the incident tangential field using gcs method of feed, with phase off option
-        Ex_i, Ey_i, Ez_i = self.feed.e_field_gcs(self.array.points[0], self.array.points[1], self.array.points[2],
-                                                 phase_off=True)
+        Ex_i, Ey_i, Ez_i = self.Ex_r, self.Ey_r, np.zeros_like(self.Ex_r)
+        # convert to gcs
+        for i in range(self.array.points.shape[1]):
+            # transform the local e field in the global frame
+            # create the transformation matrix (same of array.draw_elements_mayavi)
+            R = np.empty((3, 3))
+            R[:, 0] = self.array.el_x[:, i]
+            R[:, 1] = self.array.el_y[:, i]
+            R[:, 2] = self.array.el_z[:, i]
+            # compute the global e field
+            Ex_i[i], Ey_i[i], Ez_i[i] = R @ np.array([Ex_i[i], Ey_i[i], Ez_i[i]])
+            # remove the angle
+            Ex_i[i], Ey_i[i], Ez_i[i] = np.abs(Ex_i[i]), np.abs(Ey_i[i]), np.abs(Ez_i[i])
+
         if phase_color == False:
             # draw the e field with mayavi for every point
-            ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], Ex_i,
-                        Ey_i, Ez_i, **kwargs)
+            ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], np.real(Ex_i),
+                              np.real(Ey_i), np.real(Ez_i), **kwargs)
         else:
-            obj = ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], Ex_i,
-                              Ey_i, Ez_i, scalars=np.angle(self.Ex_i), scale_mode='none', **kwargs)
+            obj = ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], np.real(Ex_i).reshape(-1),
+                              np.real(Ey_i).reshape(-1), np.real(Ez_i).reshape(-1), scalars=np.angle(self.Ex_i).reshape(-1), scale_mode='none', **kwargs)
             obj.glyph.color_mode = 'color_by_scalar'
 
 
@@ -348,7 +365,7 @@ if __name__ == "__main__":
     # elements spacing (square elements)
     dx = wavelength / 2
     # aperture size
-    L = 1
+    L = 2
     W = 0.3
     # circular section angle
     tc = 90 * pi / 180
@@ -358,14 +375,14 @@ if __name__ == "__main__":
     # position the feed at the focus of the cylinder on the z axis pointing down
     x = 0
     y = 0
-    z = 0.5  # m
+    z = 1# m
     feed = FeedAntenna(x, y, z, 0, 0, -1, 1, 0, 0, freq)
     ## create ra cell
     cell = RACell()
     # create the reflectarray
     reflectarray = ReflectArray(cell, feed, array)
     # display the RA in mayavi
-    ml.figure(2, bgcolor=(0, 0, 0))
+    ml.figure(1, bgcolor=(0, 0, 0))
     ml.clf()
     # draw the array
     reflectarray.array.draw_elements_mayavi(color=(.6, .4, 0.1))
@@ -405,13 +422,18 @@ if __name__ == "__main__":
                       scalars=np.angle(reflectarray.Ex_i), colormap='hsv', scale_mode='none', scale_factor=dx,
                       mode='arrow')
     obj.glyph.color_mode = 'color_by_scalar'
+
+    #%%
+    print('drawing reflected tangential field...')
+    reflectarray.draw_reflected_tangential_e_field(phase_color=True, scale_factor=dx)
+    #%%
     ml.show()
 
     # %% RA test COLLIMATION AND reflected tangential field computation and visualization
     # call the update function
     reflectarray.__update__()
     # redraw the reflectarray mayavi
-    ml.figure(2, bgcolor=(0, 0, 0))
+    scene = ml.figure(2, bgcolor=(0, 0, 0))
     ml.clf()
     # draw the array
     reflectarray.array.draw_elements_mayavi(color=(.6, .4, 0.1))
@@ -420,5 +442,45 @@ if __name__ == "__main__":
     # draw the feed lcs
     reflectarray.feed.plot_lcs(scale_factor=0.05)
     # draw the surface phase shifts
-    reflectarray.array.draw_element_surfaces_mayavi(parameter=reflectarray.phase_shift)
+    reflectarray.array.draw_element_surfaces_mayavi(parameter=reflectarray.phase_shift/(2*pi))
+    # draw the reflected tangential field
+
     ml.show()
+
+    #%% test the far field
+    # phi = 0 cut (azimuthal)
+    theta = np.linspace(-pi/2, pi/2, 3600)
+    phi = np.ones_like(theta) * 0
+    Etheta, Ephi = reflectarray.far_field(theta, phi)
+    # plot the far field
+    fig, ax = plt.subplots(1)
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta)), label='Etheta e-cut')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi)), label='Ephi e-cut')
+    ax.set_xlabel('theta [deg]')
+    ax.set_ylabel('E [dB]')
+    ax.set_title('Far field')
+    ax.legend()
+    plt.show()
+    # phi =90 cut (polar)
+    phi = np.ones_like(theta) * pi / 2
+    Etheta, Ephi = reflectarray.far_field(theta, phi)
+    # plot the far field
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta)),'--', label='Etheta h-cut')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi)), '--' , label='Ephi h-cut')
+    ax.legend()
+    plt.show()
+
+    # add to the plot the individual x and y components
+    # 1. set the complex excitation of the elements as the reflected field
+    reflectarray.array.excitations = reflectarray.Ex_r
+    # set the elements polarisation to x
+    reflectarray.array.polarization = "x"
+    # 2. compute the far field
+    Etheta_x, Ephi_x = reflectarray.array.far_field(theta, phi)
+    # y component
+    # set the elements polarisation to y
+    reflectarray.array.polarization = "y"
+    # 1. set the complex excitation of the elements as the reflected field
+    reflectarray.array.excitations = reflectarray.Ey_r
+    # 2. compute the far field
+    Etheta_y, Ephi_y = reflectarray.array.far_field(theta, phi)
