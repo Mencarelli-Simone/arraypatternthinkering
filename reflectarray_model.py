@@ -551,30 +551,33 @@ if __name__ == "__main__":
     ax.legend()
     plt.show()
     # %% test the co and cross polarized components
+    theta = np.linspace(-pi / 2, pi / 2, 1800)
+    phi = np.ones_like(theta) * 0
+
     Etheta, Ephi = reflectarray.far_field(theta, phi)
     Ex_co, Ex_cross = reflectarray.co_cross_pol(theta, phi, polarization='x', E_theta=Etheta, E_phi=Ephi)
     Ey_co, Ey_cross = reflectarray.co_cross_pol(theta, phi, polarization='y', E_theta=Etheta, E_phi=Ephi)
     # plot the far field
     fig, ax = plt.subplots(1)
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_co)), label='Ex co')
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_co)), label='Ex co')
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_cross)), '--', label='Ey cross')
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_cross)), '--', label='Ey cross')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ex_co)), label='Ex co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ey_co)), label='Ey co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ex_cross)), '--', label='Ex cross')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ey_cross)), '--', label='Ey cross')
     ax.set_xlabel('theta [deg]')
     ax.set_ylabel('E [dB]')
     ax.set_title('Far field')
     ax.legend()
-    plt.show()
 
     # phi = 0 cut (azimuthal)
-    theta = np.linspace(-pi / 2, pi / 2, 3600)
-    phi = np.ones_like(theta) * 0
+    theta = np.linspace(-pi / 2, pi / 2, 1800)
+    phi = np.ones_like(theta) * pi/2
+
     Etheta, Ephi = reflectarray.far_field(theta, phi)
     Ex_co, Ex_cross = reflectarray.co_cross_pol(theta, phi, polarization='x', E_theta=Etheta, E_phi=Ephi)
     Ey_co, Ey_cross = reflectarray.co_cross_pol(theta, phi, polarization='y', E_theta=Etheta, E_phi=Ephi)
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_co)), label='Ex co')
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_co)), label='Ex co')
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_cross)), '--', label='Ey cross')
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_cross)), '--', label='Ey cross')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ex_co)), label='Ex co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ey_co)), label='Ey co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ex_cross)), '--', label='Ex cross')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ey_cross)), '--', label='Ey cross')
     ax.legend()
     plt.show()
