@@ -257,25 +257,48 @@ class ReflectArray:
         Ephi = Ephi_x + Ephi_y
         return Etheta, Ephi
 
-    def co_pol(self, theta, phi, polarization='x'):
+    def co_cross_pol(self, theta, phi, polarization='x', E_theta=None, E_phi=None):
         """
-        extracts the co polarized component of the far field Ludwig3 definition
-        :param theta:
-        :param phi:
-        :param polarization:
+        extracts the co and cross polarized components of the far field using Ludwig3 definition
+        :param theta: theta angle
+        :param phi: phi angle same shape of theta
+        :param polarization: polarization of the co polarized component x or y (default x)
         :return:
         """
-        pass
+        shape = theta.shape
+        theta = theta.reshape(-1)
+        phi = phi.reshape(-1)
+        # compute the far field
+        if E_theta is None or E_phi is None:
+            E_theta, E_phi = self.far_field(theta, phi)
+        # compute the co and cross polarized components
+        if polarization == 'x':
+            # x co x pol matrix Ludwig3 eq 4.34 [1]
+            M = np.zeros((theta.shape[0], 2, 2))
+            M[:, 0, 0] = cos(phi)
+            M[:, 0, 1] = -sin(phi)
+            M[:, 1, 0] = - sin(phi)
+            M[:, 1, 1] = - cos(phi)
+            b = M @ np.vstack([E_theta, E_phi]).T.reshape(-1, 2, 1)
+            E_co = b[:, 0, 0]
+            E_cross = b[:, 1, 0]
 
-    def cross_pol(self, theta, phi, polarization='x'):
-        """
-        extracts the cross polarized component of the far field Ludwig3 definition
-        :param theta:
-        :param phi:
-        :param polarization:
-        :return:
-        """
-        pass
+        elif polarization == 'y':
+            # y co x pol matrix Ludwig3 eq 4.35 [1]
+            M = np.zeros((theta.shape[0], 2, 2))
+            M[:, 0, 0] = sin(phi)
+            M[:, 0, 1] = cos(phi)
+            M[:, 1, 0] = cos(phi)
+            M[:, 1, 1] = - sin(phi)
+            b = M @ np.vstack([E_theta, E_phi]).T.reshape(-1, 2, 1)
+            E_co = b[:, 0, 0]
+            E_cross = b[:, 1, 0]
+        else:
+            raise ValueError('polarization must be x or y')
+        # reshape the output
+        E_co = E_co.reshape(shape)
+        E_cross = E_cross.reshape(shape)
+        return E_co, E_cross
 
     # graphics
     def draw_reflectarray(self):
@@ -327,10 +350,12 @@ class ReflectArray:
         if phase_color == False:
             # draw the e field with mayavi for every point
             ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], np.real(Ex_i),
-                              np.real(Ey_i), np.real(Ez_i), **kwargs)
+                        np.real(Ey_i), np.real(Ez_i), **kwargs)
         else:
-            obj = ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], np.real(Ex_i).reshape(-1),
-                              np.real(Ey_i).reshape(-1), np.real(Ez_i).reshape(-1), scalars=np.angle(self.Ex_i).reshape(-1), scale_mode='none', **kwargs)
+            obj = ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :],
+                              np.real(Ex_i).reshape(-1),
+                              np.real(Ey_i).reshape(-1), np.real(Ez_i).reshape(-1),
+                              scalars=np.angle(self.Ex_i).reshape(-1), scale_mode='none', **kwargs)
             obj.glyph.color_mode = 'color_by_scalar'
 
 
@@ -368,14 +393,14 @@ if __name__ == "__main__":
     L = 2
     W = 0.3
     # circular section angle
-    tc = 90 * pi / 180
+    tc = 100 * pi / 180
     ## create the array
     array, radius = create_cylindrical_array(L, W, tc, dx, freq)
     ## create the feed
     # position the feed at the focus of the cylinder on the z axis pointing down
     x = 0
     y = 0
-    z = 1# m
+    z = 0.5  # m
     feed = FeedAntenna(x, y, z, 0, 0, -1, 1, 0, 0, freq)
     ## create ra cell
     cell = RACell()
@@ -423,10 +448,10 @@ if __name__ == "__main__":
                       mode='arrow')
     obj.glyph.color_mode = 'color_by_scalar'
 
-    #%%
+    # %%
     print('drawing reflected tangential field...')
     reflectarray.draw_reflected_tangential_e_field(phase_color=True, scale_factor=dx)
-    #%%
+    # %%
     ml.show()
 
     # %% RA test COLLIMATION AND reflected tangential field computation and visualization
@@ -442,14 +467,14 @@ if __name__ == "__main__":
     # draw the feed lcs
     reflectarray.feed.plot_lcs(scale_factor=0.05)
     # draw the surface phase shifts
-    reflectarray.array.draw_element_surfaces_mayavi(parameter=reflectarray.phase_shift/(2*pi))
+    reflectarray.array.draw_element_surfaces_mayavi(parameter=reflectarray.phase_shift / (2 * pi))
     # draw the reflected tangential field
 
     ml.show()
 
-    #%% test the far field
+    # %% test the far field
     # phi = 0 cut (azimuthal)
-    theta = np.linspace(-pi/2, pi/2, 3600)
+    theta = np.linspace(-pi / 2, pi / 2, 3600)
     phi = np.ones_like(theta) * 0
     Etheta, Ephi = reflectarray.far_field(theta, phi)
     # plot the far field
@@ -459,14 +484,33 @@ if __name__ == "__main__":
     ax.set_xlabel('theta [deg]')
     ax.set_ylabel('E [dB]')
     ax.set_title('Far field')
+    # add to the plot the individual x and y components
+    # 1. set the complex excitation of the elements as the reflected field
+    reflectarray.array.excitations = reflectarray.Ex_r
+    # set the elements polarisation to x
+    reflectarray.array.polarization = "x"
+    # 2. compute the far field
+    Etheta_x, Ephi_x = reflectarray.array.far_field(theta, phi)
+    # y component
+    # set the elements polarisation to y
+    reflectarray.array.polarization = "y"
+    # 1. set the complex excitation of the elements as the reflected field
+    reflectarray.array.excitations = reflectarray.Ey_r
+    # 2. compute the far field
+    Etheta_y, Ephi_y = reflectarray.array.far_field(theta, phi)
+    # 3. plot the components
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_x)), label='Etheta x')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_x)), label='Ephi x')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_y)), label='Etheta y')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_y)), label='Ephi y')
     ax.legend()
     plt.show()
     # phi =90 cut (polar)
     phi = np.ones_like(theta) * pi / 2
     Etheta, Ephi = reflectarray.far_field(theta, phi)
     # plot the far field
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta)),'--', label='Etheta h-cut')
-    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi)), '--' , label='Ephi h-cut')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta)), '--', label='Etheta h-cut')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi)), '--', label='Ephi h-cut')
     ax.legend()
     plt.show()
 
@@ -484,3 +528,53 @@ if __name__ == "__main__":
     reflectarray.array.excitations = reflectarray.Ey_r
     # 2. compute the far field
     Etheta_y, Ephi_y = reflectarray.array.far_field(theta, phi)
+    # 3. plot the components
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_x)), '--', label='Etheta x')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_x)), '--', label='Ephi x')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_y)), '--', label='Etheta y')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_y)), '--', label='Ephi y')
+    ax.legend()
+    plt.show()
+    # %% test the co and cross polarized components
+    Etheta, Ephi = reflectarray.far_field(theta, phi)
+    Etheta_co, Etheta_cross = reflectarray.co_cross_pol(theta, phi, polarization='x', E_theta=Etheta, E_phi=Ephi)
+    Ephi_co, Ephi_cross = reflectarray.co_cross_pol(theta, phi, polarization='y', E_theta=Etheta, E_phi=Ephi)
+    # plot the far field
+    fig, ax = plt.subplots(1)
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_co)), label='Etheta co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_co)), label='Ephi co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_cross)), label='Etheta cross')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_cross)), label='Ephi cross')
+    ax.set_xlabel('theta [deg]')
+    ax.set_ylabel('E [dB]')
+    ax.set_title('Far field')
+    ax.legend()
+    plt.show()
+    # %% test the co and cross polarized components
+    Etheta, Ephi = reflectarray.far_field(theta, phi)
+    Ex_co, Ex_cross = reflectarray.co_cross_pol(theta, phi, polarization='x', E_theta=Etheta, E_phi=Ephi)
+    Ey_co, Ey_cross = reflectarray.co_cross_pol(theta, phi, polarization='y', E_theta=Etheta, E_phi=Ephi)
+    # plot the far field
+    fig, ax = plt.subplots(1)
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_co)), label='Ex co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_co)), label='Ex co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_cross)), '--', label='Ey cross')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_cross)), '--', label='Ey cross')
+    ax.set_xlabel('theta [deg]')
+    ax.set_ylabel('E [dB]')
+    ax.set_title('Far field')
+    ax.legend()
+    plt.show()
+
+    # phi = 0 cut (azimuthal)
+    theta = np.linspace(-pi / 2, pi / 2, 3600)
+    phi = np.ones_like(theta) * 0
+    Etheta, Ephi = reflectarray.far_field(theta, phi)
+    Ex_co, Ex_cross = reflectarray.co_cross_pol(theta, phi, polarization='x', E_theta=Etheta, E_phi=Ephi)
+    Ey_co, Ey_cross = reflectarray.co_cross_pol(theta, phi, polarization='y', E_theta=Etheta, E_phi=Ephi)
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_co)), label='Ex co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_co)), label='Ex co')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_cross)), '--', label='Ey cross')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_cross)), '--', label='Ey cross')
+    ax.legend()
+    plt.show()
