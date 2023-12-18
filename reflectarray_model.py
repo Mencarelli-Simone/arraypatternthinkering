@@ -300,6 +300,28 @@ class ReflectArray:
         E_cross = E_cross.reshape(shape)
         return E_co, E_cross
 
+    def directive_gain(self, theta, phi, polarization='x', E_theta=None, E_phi=None):
+        """
+        Compute the directive gain of the reflectarray
+        :param theta: polar angle
+        :param phi: azimuthal angle
+        :param polarization: polarization of the co polarized component x or y (default x)
+        :return: directive gain
+        """
+        # compute the far field
+        if E_theta is None or E_phi is None:
+            E_theta, E_phi = self.far_field(theta, phi)
+        # compute the co and cross polarized components
+        E_co, E_cross = self.co_cross_pol(theta, phi, polarization, E_theta, E_phi)
+        # compute the directive gains (co and cross) dividing the radiated power by the
+        # total power flux on the array elements (unpolarised) Ludwig3 eq 4.36 [1]
+        radiated_power = (np.sum(np.abs(self.Ex_r) ** 2 + np.abs(self.Ey_r) ** 2) * self.array.element_antenna.eta *
+                             self.array.element_antenna.L * self.array.element_antenna.W)
+
+        Gco = 2 * pi * np.abs(E_co) ** 2 / (self.array.element_antenna.eta * radiated_power)
+        Gcross = 2 * pi * np.abs(E_cross) ** 2 / (self.array.element_antenna.eta * radiated_power)
+        return Gco, Gcross
+
     # graphics
     def draw_reflectarray(self):
         # draw the array
@@ -570,7 +592,7 @@ if __name__ == "__main__":
 
     # phi = 0 cut (azimuthal)
     theta = np.linspace(-pi / 2, pi / 2, 1800)
-    phi = np.ones_like(theta) * pi/2
+    phi = np.ones_like(theta) * pi / 2
 
     Etheta, Ephi = reflectarray.far_field(theta, phi)
     Ex_co, Ex_cross = reflectarray.co_cross_pol(theta, phi, polarization='x', E_theta=Etheta, E_phi=Ephi)

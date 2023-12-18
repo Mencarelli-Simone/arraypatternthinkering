@@ -219,7 +219,7 @@ if __name__ == "__main__":
     plt.show()
     # %% test the feed antenna
     # create the feed antenna
-    feed = FeedAntenna(0, 0, 0, 1 / np.sqrt(2), 1 / np.sqrt(2), 0, 0, 0, 1, 10e9)
+    feed = FeedAntenna(0, 0, 0, 0 , 0, 1, 1, 0, 0, 10e9)
     # create the points
     theta = np.linspace(-pi / 2, pi / 2, 100)
     phi = np.ones_like(theta) * pi / 2
@@ -386,12 +386,12 @@ if __name__ == "__main__":
     ax.plot(x, z)
 
     # %% test the feed antenna drawing
-    feed.draw_feed(scale=300)
+    feed.draw_feed(scale=10)
     ml.show()
 
     #%% Test the feed antenna in the global cartesian system
     # create the feed antenna
-    feed = FeedAntenna(0, 0, 0, 0, 1/np.sqrt(2), 1/np.sqrt(2), 1, 0, 0, 10e9)
+    feed = FeedAntenna(0, 0, 0, 1, 0, 0, 1, 0, 0, 10e9)
     # create the points
     # sphere coordinates
     theta = np.linspace(0, pi, 19)
@@ -418,5 +418,5 @@ if __name__ == "__main__":
     # plot the feed antenna axes
     feed.plot_lcs(scale_factor=0.1)
     # plot the feed antenna
-    feed.draw_feed(scale=1)
+    feed.draw_feed(scale=0.3)
     ml.show() # PASS
