@@ -315,8 +315,9 @@ class ReflectArray:
         E_co, E_cross = self.co_cross_pol(theta, phi, polarization, E_theta, E_phi)
         # compute the directive gains (co and cross) dividing the radiated power by the
         # total power flux on the array elements (unpolarised) Ludwig3 eq 4.36 [1]
-        radiated_power = (np.sum(np.abs(self.Ex_r) ** 2 + np.abs(self.Ey_r) ** 2) * self.array.element_antenna.eta *
-                             self.array.element_antenna.L * self.array.element_antenna.W)
+        radiated_power = (
+                    np.sum(np.abs(self.Ex_r) ** 2 + np.abs(self.Ey_r) ** 2) / (2 * self.array.element_antenna.eta) *
+                    self.array.element_antenna.L * self.array.element_antenna.W)
 
         Gco = 2 * pi * np.abs(E_co) ** 2 / (self.array.element_antenna.eta * radiated_power)
         Gcross = 2 * pi * np.abs(E_cross) ** 2 / (self.array.element_antenna.eta * radiated_power)
@@ -491,7 +492,6 @@ if __name__ == "__main__":
     # draw the surface phase shifts
     reflectarray.array.draw_element_surfaces_mayavi(parameter=reflectarray.phase_shift / (2 * pi))
     # draw the reflected tangential field
-
     ml.show()
 
     # %% test the far field
@@ -601,5 +601,81 @@ if __name__ == "__main__":
     ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ey_co)), label='Ey co')
     ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ex_cross)), '--', label='Ex cross')
     ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ey_cross)), '--', label='Ey cross')
+    ax.legend()
+    plt.show()
+    ## aperture comparison
+    from radartools.farField import UniformAperture
+    # aperture
+    eqap = UniformAperture(2.0250, 0.3021, freq)
+    # theta and phi axes, phi = 0 cut
+    theta = np.linspace(-pi / 2, pi / 2, 1800)
+    phi0 = np.ones_like(theta) * 0
+    phi90 = np.ones_like(theta) * pi / 2
+    Et, Ep = eqap.mesh_E_field_theor(theta, phi0)
+    Et1, Ep1 = eqap.mesh_E_field_theor(theta, phi90)
+    # plot the directive gain
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ep)), label='Ep phi0 eqap')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Et1)), label='Ep phi90 eqap')
+    ax.legend()
+    plt.show()
+
+
+    # %% power on surface visualization for the x component
+    # compute the power radiated on the surface
+    Prad_x = np.abs(reflectarray.Ex_r) ** 2 / (2 * reflectarray.array.element_antenna.eta)
+    Prad = (np.abs(reflectarray.Ex_r) ** 2 + np.abs(reflectarray.Ey_r) ** 2) / (
+            2 * reflectarray.array.element_antenna.eta)
+    # plot the power on the surface
+    # create mayavi figure
+    ml.figure(3, bgcolor=(0, 0, 0))
+    ml.clf()
+    # draw the ra
+    reflectarray.draw_reflectarray()
+    # draw the power on the surface
+    reflectarray.array.draw_element_surfaces_mayavi(parameter=Prad_x / np.max(Prad))
+    ml.show()
+    # %% power on surface visualization for the y component
+    # compute the power radiated on the surface
+    Prad_y = np.abs(reflectarray.Ey_r) ** 2 / (2 * reflectarray.array.element_antenna.eta)
+    # plot the power on the surface
+    # create mayavi figure
+    ml.figure(4, bgcolor=(0, 0, 0))
+    ml.clf()
+    # draw the ra
+    reflectarray.draw_reflectarray()
+    # draw the power on the surface
+    reflectarray.array.draw_element_surfaces_mayavi(parameter=Prad_y / np.max(Prad))
+    ml.show()
+
+    # %% test the directive gain and compare plots with uniform aperture gain,
+    # theta and phi axes, phi = 0 cut
+    theta = np.linspace(-pi / 2, pi / 2, 1800)
+    phi0 = np.ones_like(theta) * 0
+    phi90 = np.ones_like(theta) * pi / 2
+    # compute the directive gain
+    Gco, Gcross = reflectarray.directive_gain(theta, phi0, polarization='x')
+    # plot the directive gain
+    fig, ax = plt.subplots(1)
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gco), label='Gco phi0')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gcross), label='Gcross phi0')
+    Gco, Gcross = reflectarray.directive_gain(theta, phi90, polarization='x')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gco), label='Gco phi90')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gcross), label='Gcross phi90')
+    ax.set_xlabel('theta [deg]')
+    ax.set_ylabel('G [dB]')
+    ax.set_title('Directive gain')
+    ax.legend()
+    plt.show()
+
+    # %% compute the gain for an equivalent aperture
+    from radartools.farField import UniformAperture
+    # aperture
+    eqap = UniformAperture(2.0250, 0.3021, freq)
+    # compute the gain
+    G = eqap.mesh_gain_pattern_theor(theta, phi0)
+    G1 = eqap.mesh_gain_pattern_theor(theta, phi90)
+    # plot the directive gain
+    ax.plot(theta * 180 / pi, 10 * np.log10(G), label='Gco phi0 eqap')
+    ax.plot(theta * 180 / pi, 10 * np.log10(G1), label='Gco phi90 eqap')
     ax.legend()
     plt.show()

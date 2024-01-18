@@ -649,3 +649,5 @@ if __name__ == '__main__':
     ax.plot(theta, g)
     plt.show()
     print("pippo")
+
+
