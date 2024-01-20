@@ -166,6 +166,9 @@ class AbaqusMesh:
         self.Xcell_def = None
         self.Ycell_def = None
         self.Zcell_def = None
+        # fill in the values
+        self.get_cell_centers()
+        self.get_cell_lcs()
 
     def scale(self, xscale=1, yscale=1, zscale=1):
         """
@@ -179,6 +182,9 @@ class AbaqusMesh:
         self.Xdef = self.Xundef + self.defX * xscale
         self.Zdef = self.Zundef + self.defZ * zscale
 
+    def half_symmetry(self):
+        self.defY[:, int(self.xpoints/2):] = - self.defY[:, int(self.xpoints/2):]
+        self.scale(yscale=1)
     # symmetries
     def symmetric_def(self, axis='x'):
         """
@@ -196,6 +202,13 @@ class AbaqusMesh:
         elif axis == 'z':
             self.defZ = -self.defZ
             self.Zdef = self.Zundef + self.defZ
+    def mirror_about_plane(self, axis='x'):
+        """
+        mirror the mesh about one axis
+        :param axis:
+        :return:
+        """
+        pass
 
     def get_cell_centers(self):
         """
@@ -301,28 +314,32 @@ class AbaqusMesh:
 
 # %% main
 if __name__ == "__main__":
-    filename = 'random_analysis_results/res_2mode.txt'
+    filename = 'random_analysis_results/res_1mode.txt'
     rows = 3312
     columns = 11
     xpoints = 23
     ypoints = 144
     defomesh = AbaqusMesh(filename, rows, columns, xpoints, ypoints)
-    defomesh.scale(yscale=90)
+    defomesh.half_symmetry()
+    defomesh.scale(yscale=10, xscale=10, zscale=10)
     # %% plotter
     ml.figure(bgcolor=(0, 0, 0))
     defomesh.plot_nominal(opacity=1, color=(.8, .8, .8))
+    defomesh.plot_nominal(color=(0, 0, 0), representation='wireframe', opacity=0.99)
     defomesh.plot_deformed(colormap='jet', opacity=0.99)
+    defomesh.plot_cell_centers(color=(1, 1, 1), scale_factor=0.001)
     defomesh.plot_deformed(color=(0, 0, 1), representation='wireframe', opacity=0.99)
     defomesh1 = copy.deepcopy(defomesh)
 
     # %% symmetries
     defomesh1.symmetric_def(axis='y')
-    defomesh1.scale(yscale=90)
+    defomesh1.scale(yscale=1)
     defomesh1.plot_deformed(colormap='jet', opacity=0.99)
     defomesh1.plot_deformed(color=(1, 0, 0), representation='wireframe', opacity=0.99)
-    defomesh1.plot_cell_centers(color=(1, 1, 1), scale_factor=0.005)
+    defomesh1.plot_cell_centers(color=(1, 1, 1), scale_factor=0.001)
 
     # lcs
+    defomesh.plot_lcs(scale_factor=0.01, mode='arrow')
     defomesh1.plot_lcs(scale_factor=0.01, mode='arrow')
     ml.show()
     x1, x2, x3, y1, y2, y3, z1, z2, z3, x1_def, x2_def, x3_def, y1_def, y2_def, y3_def, z1_def, z2_def, z3_def = defomesh1.get_cell_lcs()

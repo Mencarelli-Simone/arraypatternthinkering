@@ -198,6 +198,8 @@ class FeedAntenna():
                     color=(0, 0, 1), **kwargs)
 
 
+# todo extend the feed class to a cosine pattern feed
+
 # %% Test code
 # main
 if __name__ == "__main__":

@@ -102,12 +102,14 @@ class ReflectArray:
         # collimation direction
         self.theta_broadside = None
         self.phi_broadside = None
+        self.__update__(collimate=False, reflect=False)
 
-    def __update__(self, collimate=True):
+    def __update__(self, collimate=False, reflect=True):
         """
         Update the reflectarray model
         :return:
         """
+        print('updating reflectarray model...')
         # compute the incident tangential field
         self.compute_incident_tangential_field()
         # collimate the beam
@@ -119,7 +121,8 @@ class ReflectArray:
         # compute the elements angle of incidence
         self.compute_elements_angle_of_incidence()
         # compute the reflected tangential field
-        self.compute_reflected_tangential_field()
+        if reflect:
+            self.compute_reflected_tangential_field()
 
     def compute_incident_tangential_field(self, phase_off=False):
         # This method shall be jitted to run in parallel
@@ -238,6 +241,7 @@ class ReflectArray:
         :param phi: azimuthal angle
         :return: far field E_theta, E_phi
         """
+        print('computing far field...')
         # x component
         # 1. set the complex excitation of the elements as the reflected field
         self.array.excitations = self.Ex_r
@@ -311,6 +315,7 @@ class ReflectArray:
         # compute the far field
         if E_theta is None or E_phi is None:
             E_theta, E_phi = self.far_field(theta, phi)
+        E_theta, E_phi = self.far_field(theta, phi)
         # compute the co and cross polarized components
         E_co, E_cross = self.co_cross_pol(theta, phi, polarization, E_theta, E_phi)
         # compute the directive gains (co and cross) dividing the radiated power by the
