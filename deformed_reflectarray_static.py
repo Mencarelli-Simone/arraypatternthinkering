@@ -7,7 +7,7 @@ import mayavi.mlab as ml
 from reflectarray_model import ReflectArray, RACell
 from conformal_array_pattern import ConformalArray
 from feed_antenna_pattern import FeedAntenna
-from AbaqusMeshGridReader import AbaqusMesh
+from abaqus_mesh_grid_reader import AbaqusMesh
 from radartools.farField import UniformAperture
 
 # %% user input
@@ -172,3 +172,7 @@ plt.show()
 #% debugg plotting, check the phase shift in the two reflectarrays
 
 # %% debugg plotting, check the radiated power in the two reflectarrays
+
+# %% add comparison with uniform aperture
+
+# %% todo for the paper add a tapered feed field, e.g. double cosine description.
