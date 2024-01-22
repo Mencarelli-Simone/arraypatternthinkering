@@ -168,3 +168,7 @@ plt.legend()
 plt.xlabel('theta (deg)')
 plt.ylabel('Gain (dB)')
 plt.show()
+
+#% debugg plotting, check the phase shift in the two reflectarrays
+
+# %% debugg plotting, check the radiated power in the two reflectarrays
