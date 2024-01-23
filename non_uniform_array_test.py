@@ -16,7 +16,7 @@ import mayavi.mlab as ml
 # set pyqt5 render
 matplotlib.use('Qt5Agg')
 # %% parameters
-#  CYLINDRICAL aperture definition
+#  CYLINDRICAL apertu With exception to low-cost carriers, bookings may not be confirmed until an Orbit Travel Form has been received. re definition
 # antenna parameters
 freq = 10e9
 wavelength = 3e8 / freq

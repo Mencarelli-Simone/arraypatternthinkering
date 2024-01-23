@@ -3,6 +3,7 @@
 # %% import
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy import pi
 import mayavi.mlab as ml
 from reflectarray_model import ReflectArray, RACell
 from conformal_array_pattern import ConformalArray
@@ -131,7 +132,7 @@ ref_def.draw_reflectarray()
 ref_undef.array.draw_elements_mayavi(color=(.2, .2, .2))
 # lcs
 ref_def.array.plot_lcs_mayavi(length=dx / 2)
-ml.show()
+# ml.show()
 
 # %% collimate the reflectarray in the nominal configuration
 phase_shifts = ref_undef.collimate_beam(0, 0)
@@ -140,6 +141,61 @@ ref_def.phase_shift = phase_shifts
 # compute the status vector
 ref_def.__update__(collimate=False, reflect=True)
 ref_undef.__update__(collimate=False, reflect=True)
+# % %debugg plotting, check the phase shift in the two reflectarrays
+# create mayavi figure for the undeformed
+ml.figure(4, bgcolor=(0, 0, 0))
+# clear
+ml.clf()
+# draw the reflectarray undeformed
+ref_undef.draw_reflectarray()
+# draw the surfaces
+ref_undef.array.draw_element_surfaces_mayavi(parameter=ref_undef.phase_shift / (2 * pi))
+# create mayavi figure for the deformed
+ml.figure(5, bgcolor=(0, 0, 0))
+# clear
+ml.clf()
+# draw the reflectarray deformed
+ref_def.draw_reflectarray()
+# draw the surfaces
+ref_def.array.draw_element_surfaces_mayavi(parameter=ref_def.phase_shift / (2 * pi))
+# show
+ml.show()
+
+# %% debug plotting, check the radiated power in the two reflectarrays
+# compute the radiated power on surface
+Prad_x = np.abs(ref_undef.Ex_r) ** 2 / (2 * ref_undef.array.element_antenna.eta)
+Prad = (np.abs(ref_undef.Ex_r) ** 2 + np.abs(ref_undef.Ey_r) ** 2) / (
+        2 * ref_undef.array.element_antenna.eta)
+# create mayavi figure for the undeformed
+ml.figure(6, bgcolor=(0, 0, 0))
+# clear
+ml.clf()
+# draw the reflectarray undeformed
+ref_undef.draw_reflectarray()
+# draw the surfaces
+print("drawing surfaces ...")
+ref_undef.array.draw_element_surfaces_mayavi(parameter=Prad_x / np.max(Prad))
+# radiated power defomrmed on x
+Prad_x_d = np.abs(ref_def.Ex_r) ** 2 / (2 * ref_def.array.element_antenna.eta)
+# plotting
+ml.figure(7, bgcolor=(0, 0, 0))
+# clear
+ml.clf()
+# draw the reflectarray deformed
+ref_def.draw_reflectarray()
+# draw the surfaces
+print("drawing surfaces ...")
+ref_def.array.draw_element_surfaces_mayavi(parameter=Prad_x_d / np.max(Prad))
+ml.show()
+
+
+#%% power difference deformed undeformed
+pdiff = Prad_x - Prad_x_d
+# plot as colormap
+fig, ax = plt.subplots(1)
+c = ax.pcolormesh(pdiff)
+fig.colorbar(c, ax=ax)
+plt.show()
 # %% far field calculation
 from numpy import pi
 
@@ -155,24 +211,22 @@ Gco1_d, Gcross1_d = ref_def.directive_gain(theta, phi1, polarization='x')
 # %% plotting
 plt.figure(3)
 plt.clf()
-plt.plot(theta * 180 / pi, 10*np.log10(Gco0), '--', label='co-pol')
-plt.plot(theta * 180 / pi, 10*np.log10(Gcross0), '--', label='cross-pol')
-plt.plot(theta * 180 / pi, 10*np.log10(Gco1), '--', label='co-pol')
-plt.plot(theta * 180 / pi, 10*np.log10(Gcross1), '--', label='cross-pol')
+plt.plot(theta * 180 / pi, 10 * np.log10(Gco0), '--', label='co-pol')
+plt.plot(theta * 180 / pi, 10 * np.log10(Gcross0), '--', label='cross-pol')
+plt.plot(theta * 180 / pi, 10 * np.log10(Gco1), '--', label='co-pol')
+plt.plot(theta * 180 / pi, 10 * np.log10(Gcross1), '--', label='cross-pol')
 # deformed
-plt.plot(theta * 180 / pi, 10*np.log10(Gco0_d), label='co-pol')
-plt.plot(theta * 180 / pi, 10*np.log10(Gcross0_d), label='cross-pol')
-plt.plot(theta * 180 / pi, 10*np.log10(Gco1_d), label='co-pol')
-plt.plot(theta * 180 / pi, 10*np.log10(Gcross1_d), label='cross-pol')
+plt.plot(theta * 180 / pi, 10 * np.log10(Gco0_d), label='co-pol')
+plt.plot(theta * 180 / pi, 10 * np.log10(Gcross0_d), label='cross-pol')
+plt.plot(theta * 180 / pi, 10 * np.log10(Gco1_d), label='co-pol')
+plt.plot(theta * 180 / pi, 10 * np.log10(Gcross1_d), label='cross-pol')
 plt.legend()
 plt.xlabel('theta (deg)')
 plt.ylabel('Gain (dB)')
+# plt.show()
 plt.show()
-
-#% debugg plotting, check the phase shift in the two reflectarrays
-
-# %% debugg plotting, check the radiated power in the two reflectarrays
 
 # %% add comparison with uniform aperture
 
 # %% todo for the paper add a tapered feed field, e.g. double cosine description.
+# todo invert phase envelope to make circles
