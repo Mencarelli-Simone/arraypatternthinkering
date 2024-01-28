@@ -99,6 +99,12 @@ class ReflectArray:
         self.Ex = None
         # and y component
         self.Ey = None
+        # and z component of the reflected plane wave
+        self.Ez = None
+        # also the H field of the reflected plane wave
+        self.Hx = None
+        self.Hy = None
+        self.Hz = None
         # collimation direction
         self.theta_broadside = None
         self.phi_broadside = None
@@ -201,8 +207,8 @@ class ReflectArray:
                          cos(theta_broadside)])
         # 2: find the distance between the plane and each element using the matrix product point coordinate- norm
         d = self.array.points.T @ norm
-        # 3: compute the phase shift for the collimated beam
-        desired_phase = -2 * pi * d / self.feed.wavelength
+        # 3: compute the phase shift for the collimated beam + - upchirp down chirp shapes
+        desired_phase = (-2 * pi * d / self.feed.wavelength) % (2 * pi)  # this modulo normalization is necessary?
         # 4: required phase shift offset
         required_phase_shift = (desired_phase - phase + phase_shift_offset) % (2 * pi)
         # returns the required phase shifts to collimate the beam
@@ -231,7 +237,19 @@ class ReflectArray:
         Er = gamma @ Ei.reshape(-1, 2, 1)
         self.Ex_r = Er[:, 0]
         self.Ey_r = Er[:, 1]
-        return Er[:, 0], Er[:, 1]
+        # the plane wave reflection direction is given by theta and phi + pi/2
+        # from spherical to cartesian
+        kx = sin(self.theta_inc) * cos(self.phi_inc + pi / 2)
+        ky = sin(self.theta_inc) * sin(self.phi_inc + pi / 2)
+        kz = cos(self.theta_inc)
+        # the z component of e can be calculated (eq 8 in Prado et all, Efficient Crosspolar optimization of shaped-beam dual polarized reflectarrays)
+        self.Ez_r = (- kx * Ex_r - ky * Ey_r) / kz
+        # compute the H field as (k x E) / eta (cross product)
+        self.Hx = (ky * self.Ez_r - kz * self.Ey_r) / self.array.element_antenna.eta
+        self.Hy = (kz * self.Ex_r - kx * self.Ez_r) / self.array.element_antenna.eta
+        self.Hz = (kx * self.Ey_r - ky * self.Ex_r) / self.array.element_antenna.eta
+        # with this we already have the tangetial field components (in lcs) for the aperture integration.
+        return self.Ex_r, self.Ey_r, self.Ez_r, self.Hx, self.Hy, self.Hz
 
     def far_field(self, theta, phi):
         """
@@ -241,7 +259,7 @@ class ReflectArray:
         :param phi: azimuthal angle
         :return: far field E_theta, E_phi
         """
-        print('computing far field...')
+        print('computing far field...')  # todo change this to an aperture integration, but keep this for testing
         # x component
         # 1. set the complex excitation of the elements as the reflected field
         self.array.excitations = self.Ex_r
@@ -304,6 +322,16 @@ class ReflectArray:
         E_cross = E_cross.reshape(shape)
         return E_co, E_cross
 
+    def radiated_power_per_element(self):
+        # E x H* / 2
+        # poynting vector
+        Sx = (self.Ey_r * np.conj(self.Hz) - self.Ez_r * np.conj(self.Hy)) / 2
+        Sy = (self.Ez_r * np.conj(self.Hx) - self.Ex_r * np.conj(self.Hz)) / 2
+        Sz = (self.Ex_r * np.conj(self.Hy) - self.Ey_r * np.conj(self.Hx)) / 2
+        # power per element, ie S dot z * surface area
+        P = Sz * self.array.element_antenna.L * self.array.element_antenna.W
+        return P
+
     def directive_gain(self, theta, phi, polarization='x', E_theta=None, E_phi=None):
         """
         Compute the directive gain of the reflectarray
@@ -320,9 +348,10 @@ class ReflectArray:
         E_co, E_cross = self.co_cross_pol(theta, phi, polarization, E_theta, E_phi)
         # compute the directive gains (co and cross) dividing the radiated power by the
         # total power flux on the array elements (unpolarised) Ludwig3 eq 4.36 [1]
+        # todo change this to a proper flux with poynting vector and all but keep this version for testing
         radiated_power = (
-                    np.sum(np.abs(self.Ex_r) ** 2 + np.abs(self.Ey_r) ** 2) / (2 * self.array.element_antenna.eta) *
-                    self.array.element_antenna.L * self.array.element_antenna.W)
+                np.sum(np.abs(self.Ex_r) ** 2 + np.abs(self.Ey_r) ** 2) / (2 * self.array.element_antenna.eta) *
+                self.array.element_antenna.L * self.array.element_antenna.W)
 
         Gco = 2 * pi * np.abs(E_co) ** 2 / (self.array.element_antenna.eta * radiated_power)
         Gcross = 2 * pi * np.abs(E_cross) ** 2 / (self.array.element_antenna.eta * radiated_power)
@@ -421,7 +450,7 @@ if __name__ == "__main__":
     L = 2
     W = 0.3
     # circular section angle
-    tc = 100 * pi / 180
+    tc = 1 * pi / 180
     ## create the array
     array, radius = create_cylindrical_array(L, W, tc, dx, freq)
     ## create the feed
@@ -434,6 +463,7 @@ if __name__ == "__main__":
     cell = RACell()
     # create the reflectarray
     reflectarray = ReflectArray(cell, feed, array)
+    reflectarray.__update__(collimate=True, reflect=True)
     # display the RA in mayavi
     ml.figure(1, bgcolor=(0, 0, 0))
     ml.clf()
@@ -610,6 +640,7 @@ if __name__ == "__main__":
     plt.show()
     ## aperture comparison
     from radartools.farField import UniformAperture
+
     # aperture
     eqap = UniformAperture(2.0250, 0.3021, freq)
     # theta and phi axes, phi = 0 cut
@@ -623,7 +654,6 @@ if __name__ == "__main__":
     ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Et1)), label='Ep phi90 eqap')
     ax.legend()
     plt.show()
-
 
     # %% power on surface visualization for the x component
     # compute the power radiated on the surface
@@ -674,6 +704,7 @@ if __name__ == "__main__":
 
     # %% compute the gain for an equivalent aperture
     from radartools.farField import UniformAperture
+
     # aperture
     eqap = UniformAperture(2.0250, 0.3021, freq)
     # compute the gain

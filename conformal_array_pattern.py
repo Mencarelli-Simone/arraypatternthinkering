@@ -470,6 +470,7 @@ class ConformalArray:
         :param args:
         :return:
         """
+        print("Drawing element surfaces, this may take a while...")
         cmap = plt.get_cmap(mplcmap)
         # if parameter is an array
         if isinstance(parameter, np.ndarray):

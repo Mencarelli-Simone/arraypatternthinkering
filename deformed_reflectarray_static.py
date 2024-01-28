@@ -27,7 +27,12 @@ dx = 0.015
 rf = 1  # m
 # frequency
 freq = 10e9  # Hz
-
+# Surface plots on or off
+surface_plots = True
+if ~surface_plots:
+    print("surface plots are off,no phase visualization or power visualization")
+else:
+    print("surface plots are on, plotting might be very slow")
 # %% unit cell element
 element = UniformAperture(dx, dx, freq)
 
@@ -132,9 +137,10 @@ ref_def.draw_reflectarray()
 ref_undef.array.draw_elements_mayavi(color=(.2, .2, .2))
 # lcs
 ref_def.array.plot_lcs_mayavi(length=dx / 2)
-# ml.show()
+ml.show()
 
 # %% collimate the reflectarray in the nominal configuration
+print("collimating the reflectarray ...")
 phase_shifts = ref_undef.collimate_beam(0, 0)
 # set the same phase shifts to the deformed reflectarray
 ref_def.phase_shift = phase_shifts
@@ -149,7 +155,9 @@ ml.clf()
 # draw the reflectarray undeformed
 ref_undef.draw_reflectarray()
 # draw the surfaces
-ref_undef.array.draw_element_surfaces_mayavi(parameter=ref_undef.phase_shift / (2 * pi))
+if surface_plots:
+    print("drawing surfaces ...")
+    ref_undef.array.draw_element_surfaces_mayavi(parameter=ref_undef.phase_shift / (2 * pi))
 # create mayavi figure for the deformed
 ml.figure(5, bgcolor=(0, 0, 0))
 # clear
@@ -157,7 +165,9 @@ ml.clf()
 # draw the reflectarray deformed
 ref_def.draw_reflectarray()
 # draw the surfaces
-ref_def.array.draw_element_surfaces_mayavi(parameter=ref_def.phase_shift / (2 * pi))
+if surface_plots:
+    print("drawing surfaces ...")
+    ref_def.array.draw_element_surfaces_mayavi(parameter=ref_def.phase_shift / (2 * pi))
 # show
 ml.show()
 
@@ -173,8 +183,9 @@ ml.clf()
 # draw the reflectarray undeformed
 ref_undef.draw_reflectarray()
 # draw the surfaces
-print("drawing surfaces ...")
-ref_undef.array.draw_element_surfaces_mayavi(parameter=Prad_x / np.max(Prad))
+if surface_plots:
+    print("drawing surfaces ...")
+    ref_undef.array.draw_element_surfaces_mayavi(parameter=Prad_x / np.max(Prad))
 # radiated power defomrmed on x
 Prad_x_d = np.abs(ref_def.Ex_r) ** 2 / (2 * ref_def.array.element_antenna.eta)
 # plotting
@@ -184,13 +195,15 @@ ml.clf()
 # draw the reflectarray deformed
 ref_def.draw_reflectarray()
 # draw the surfaces
-print("drawing surfaces ...")
-ref_def.array.draw_element_surfaces_mayavi(parameter=Prad_x_d / np.max(Prad))
+if surface_plots:
+    print("drawing surfaces ...")
+    ref_def.array.draw_element_surfaces_mayavi(parameter=Prad_x_d / np.max(Prad)) # avoid using this function when possible
 ml.show()
 
 
 #%% power difference deformed undeformed
 pdiff = Prad_x - Prad_x_d
+pdiff = pdiff.reshape(norm1_d.shape) / np.max(Prad)
 # plot as colormap
 fig, ax = plt.subplots(1)
 c = ax.pcolormesh(pdiff)

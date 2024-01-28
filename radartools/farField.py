@@ -333,7 +333,7 @@ class UniformAperture(Aperture):
 
         return E_theta, E_phi
 
-    def mesh_E_field_theor(self, theta_mesh: np.ndarray, phi_mesh: np.ndarray, polarization="y"):
+    def mesh_E_field_theor(self, theta_mesh: np.ndarray, phi_mesh: np.ndarray, polarization="y", source_type="huygens"):
         """
         retruns the E field in theta and phi coordinates. using the theoretical formulation for
         the far field transform of the uniform aperture.
@@ -342,22 +342,52 @@ class UniformAperture(Aperture):
         :param theta_mesh:
         :param phi_mesh:
         :param polarization: orientation of E field on the aperture
+        :param source_type: "huygens", "magnetic" or "electric"
         :return: E_theta, E_phi
         """
         self.Theta, self.Phi, self.f = self.theor_rect_field_transform(theta_mesh, phi_mesh)
         self.f *= self.e_amplitude # correct scaling for f theorical
-        # obliquity factors for Huygens source, differences in polarization come in the cas e of PEC or PMC apertures
-        c_t = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
-        c_p = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
-        # c_phi and c_theta are different for modified huygenes sources (different source impedance)
-        if polarization == "x":
-            E_theta = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_t * (self.f * np.cos(self.Phi))
-            E_phi = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_p * (- self.f * np.sin(self.Phi))
-        elif polarization == "y":
-            E_theta = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_t * (self.f * np.sin(self.Phi))
-            E_phi = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_p * (self.f * np.cos(self.Phi))
+        if source_type == "huygens":
+            # obliquity factors for Huygens source, differences in polarization come in the cas e of PEC or PMC apertures
+            c_t = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
+            c_p = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
+            # c_phi and c_theta are different for modified huygenes sources (different source impedance)
+            if polarization == "x":
+                E_theta = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_t * (self.f * np.cos(self.Phi))
+                E_phi = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_p * (- self.f * np.sin(self.Phi))
+            elif polarization == "y":
+                E_theta = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_t * (self.f * np.sin(self.Phi))
+                E_phi = 1j * self.k * exp(-1j * self.k) / (2 * np.pi) * c_p * (self.f * np.cos(self.Phi))
+            else:
+                print("Error, polarization shall be either x or y")
+        elif source_type == "magnetic":
+            # in this case the fource field is assumed to be a magnetic field of amplitude self.e_amplitude
+            # obliquity factors for magnetic field (PEC sheet cutout) (18.4.9 - magnetic source)
+            c_t = cos(self.Theta) * self.eta
+            c_p = - 1 * self.eta
+            g = self.f
+            if polarization == "x":
+                E_theta = 1j * self.k * exp(-1j * self.k) / (4 * np.pi) * c_t * (-g * np.sin(self.Phi))
+                E_phi = 1j * self.k * exp(-1j * self.k) / (4 * np.pi) * c_p * (g * np.cos(self.Phi))
+            elif polarization == "y":
+                E_theta = 1j * self.k * exp(-1j * self.k) / (4 * np.pi) * c_t * (g * np.cos(self.Phi))
+                E_phi = 1j * self.k * exp(-1j * self.k) / (4 * np.pi) * c_p * (g * np.sin(self.Phi))
+            else:
+                print("Error, polarization shall be either x or y")
+        elif source_type == "electric":
+            # in this case the fource field is assumed to be an electric field of amplitude self.e_amplitude
+            # obliquity factors for electric field (PMC sheet cutout) (18.4.9 - electric source)
+            c_t = 1
+            c_p = cos(self.Theta)
+            f = self.f
+            if polarization == "x":
+                E_theta = 1j * self.k * exp(-1j * self.k) / (4 * np.pi) * c_t * (f * np.cos(self.Phi))
+                E_phi = 1j * self.k * exp(-1j * self.k) / (4 * np.pi) * c_p * (-f * np.sin(self.Phi))
+            elif polarization == "y":
+                E_theta = 1j * self.k * exp(-1j * self.k) / (4 * np.pi) * c_t * (f * np.sin(self.Phi))
+                E_phi = 1j * self.k * exp(-1j * self.k) / (4 * np.pi) * c_p * (f * np.cos(self.Phi))
         else:
-            print("Error, polarization shall be either x or y")
+            print("Error, source type shall be either huygens, magnetic or electric")
 
         return E_theta, E_phi
 
