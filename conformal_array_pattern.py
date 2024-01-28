@@ -267,6 +267,8 @@ class ConformalArray:
         # elements polarization for the elements far field retrieval, all the elements are assumed to be
         # equally polarized. excitations for the x and y components can be applied separately and the far fields summed.
         self.polarization = 'x'
+        # source type for element pattern, can be huygens magnetic or electric field
+        self.source_type = 'huygens'  # can also be electric or magnetic for recomposition of non normal plane waves
         # array of element antennas
         self.element_antenna = element_antenna
         # compute and save the second tangential vector from tan and norm
@@ -304,7 +306,8 @@ class ConformalArray:
         theta_local, phi_local = far_field_global_to_local_spherical_coordinates(theta, phi,
                                                                                  self.el_x, self.el_y, self.el_z)
         # 2. compute the far field of the individual elements
-        E_theta, E_phi = self.element_antenna.mesh_E_field_theor(theta_local, phi_local, polarization=self.polarization)
+        E_theta, E_phi = self.element_antenna.mesh_E_field_theor(theta_local, phi_local, polarization=self.polarization,
+                                                                 source_type=self.source_type)
         # 2.1 transform the far field to the global spherical coordinates
         E_r, E_theta, E_phi = far_field_local_to_global_spherical_coordinates(theta, phi, theta_local, phi_local,
                                                                               self.el_x, self.el_y, self.el_z,
@@ -650,5 +653,3 @@ if __name__ == '__main__':
     ax.plot(theta, g)
     plt.show()
     print("pippo")
-
-
