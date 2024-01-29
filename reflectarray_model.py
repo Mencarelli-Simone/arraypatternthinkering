@@ -85,7 +85,7 @@ class ReflectArray:
         self.Ex_l = None
         self.Ey_l = None
         self.Ez_l = None
-        # tangential reflected fields lcs
+        #  reflected fields lcs
         self.Ex_r = None
         self.Ey_r = None
         self.Ez_r = None
@@ -93,17 +93,16 @@ class ReflectArray:
         self.Hx_r = None
         self.Hy_r = None
         self.Hz_r = None
-        # incidence angle for each element
+        # also the k vector of the reflected plane wave
+        self.kx = None
+        self.ky = None
+        self.kz = None
+        # incidence angle for each element (in LCS of the elements)
         self.theta_inc = None
         self.phi_inc = None
         self.r = None  # distance from the feed to the element
         # phase shifts of the elements
         self.phase_shift = None
-        # complex excitation of the array elements
-        # x component
-        self.Ex = None
-        # and y component
-        self.Ey = None
         # collimation direction
         self.theta_broadside = None
         self.phi_broadside = None
@@ -197,6 +196,7 @@ class ReflectArray:
         :param phase_shift_offset: optional, fixed phase shift offset to be added to the phase shifts 0-2pi
         :return:
         """
+        print('collimating beam...')
         # get the electric field phase for each element desired polarization
         phase = np.angle(self.Ex_i) if polarization == 'x' else np.angle(self.Ey_i)
         # compute the desired aperture phase shift
@@ -207,9 +207,9 @@ class ReflectArray:
         # 2: find the distance between the plane and each element using the matrix product point coordinate- norm
         d = self.array.points.T @ norm
         # 3: compute the phase shift for the collimated beam + - upchirp down chirp shapes
-        desired_phase = (-2 * pi * d / self.feed.wavelength) % (2 * pi)  # this modulo normalization is necessary?
+        desired_phase = (-2 * pi * d / self.feed.wavelength)
         # 4: required phase shift offset
-        required_phase_shift = (desired_phase - phase + phase_shift_offset) % (2 * pi)
+        required_phase_shift = (desired_phase - phase + phase_shift_offset) % (2 * pi) # this is correct
         # returns the required phase shifts to collimate the beam
         self.phase_shift = required_phase_shift
         # save the collimation direction
@@ -225,24 +225,24 @@ class ReflectArray:
         :return: Erx, Ery: reflected tangential field LCS of the elements
 
         """
-        # initialise the reflected field
-        Ex_r = np.zeros_like(self.Ex_i)
-        Ey_r = np.zeros_like(self.Ey_i)
         # compute the scattering matrix
         gamma = self.cell.scattering_matrix(self.theta_inc, self.phi_inc, self.phase_shift)
         # shape correctly the incident field vectors [N,2] (lcs of the elements)
-        Ei = np.vstack((self.Ex_l, self.Ey_l)).T  # todo test (if ey is 0 eyr should be 0 too)
+        Ei = np.vstack((self.Ex_l, self.Ey_l)).T
         # compute the reflected field, matrix stacks multiplications
         Er = gamma @ Ei.reshape(-1, 2, 1)
-        self.Ex_r = Er[:, 0]
-        self.Ey_r = Er[:, 1]
+        self.Ex_r = Er[:, 0].reshape(-1)  # this can make a mess if the array is not linear
+        self.Ey_r = Er[:, 1].reshape(-1)
         # the plane wave reflection direction is given by theta and phi + pi/2
         # from spherical to cartesian
-        kx = sin(self.theta_inc) * cos(self.phi_inc + pi / 2)
-        ky = sin(self.theta_inc) * sin(self.phi_inc + pi / 2)
+        kx = sin(self.theta_inc) * cos(self.phi_inc + pi)
+        ky = sin(self.theta_inc) * sin(self.phi_inc + pi)
         kz = cos(self.theta_inc)
+        self.kx = kx
+        self.ky = ky
+        self.kz = kz
         # the z component of e can be calculated (eq 8 in Prado et all, Efficient Crosspolar optimization of shaped-beam dual polarized reflectarrays)
-        self.Ez_r = (- kx * Ex_r - ky * Ey_r) / kz
+        self.Ez_r = (- kx * self.Ex_r - ky * self.Ey_r) / kz
         # compute the H field as (k x E) / eta (cross product)
         self.Hx_r = (ky * self.Ez_r - kz * self.Ey_r) / self.array.element_antenna.eta
         self.Hy_r = (kz * self.Ex_r - kx * self.Ez_r) / self.array.element_antenna.eta
@@ -264,11 +264,15 @@ class ReflectArray:
         self.array.excitations = self.Ex_r
         # set the elements polarisation to x
         self.array.polarization = "x"
+        # set field type
+        self.array.source_type = "huygens"
         # 2. compute the far field
         Etheta_x, Ephi_x = self.array.far_field(theta, phi)
         # y component
         # set the elements polarisation to y
         self.array.polarization = "y"
+        # set field type
+        self.array.source_type = "huygens"
         # 1. set the complex excitation of the elements as the reflected field
         self.array.excitations = self.Ey_r
         # 2. compute the far field
@@ -292,13 +296,13 @@ class ReflectArray:
         self.array.excitations = self.Ex_r
         # set the elements polarisation to x
         self.array.polarization = "x"
-        self.array.source_type = 'electric'
+        self.array.source_type = "electric"
         # 2. compute the far field
         Etheta_e_x, Ephi_e_x = self.array.far_field(theta, phi)
         # y component electric
         # set the elements polarisation to y
         self.array.polarization = "y"
-        self.array.source_type = 'electric'
+        self.array.source_type = "electric"
         # 1. set the complex excitation of the elements as the reflected field
         self.array.excitations = self.Ey_r
         # 2. compute the far field
@@ -308,13 +312,13 @@ class ReflectArray:
         self.array.excitations = self.Hx_r
         # set the elements polarisation to x
         self.array.polarization = "x"
-        self.array.source_type = 'magnetic'
+        self.array.source_type = "magnetic"
         # 2. compute the far field
         Etheta_m_x, Ephi_m_x = self.array.far_field(theta, phi)
         # y component magnetic
         # set the elements polarisation to y
         self.array.polarization = "y"
-        self.array.source_type = 'magnetic'
+        self.array.source_type = "magnetic"
         # 1. set the complex excitation of the elements as the reflected field
         self.array.excitations = self.Hy_r
         # 2. compute the far field
@@ -370,11 +374,11 @@ class ReflectArray:
     def radiated_power_per_element(self):
         # E x H* / 2
         # poynting vector
-        Sx = (self.Ey_r * np.conj(self.Hz) - self.Ez_r * np.conj(self.Hy)) / 2
-        Sy = (self.Ez_r * np.conj(self.Hx) - self.Ex_r * np.conj(self.Hz)) / 2
-        Sz = (self.Ex_r * np.conj(self.Hy) - self.Ey_r * np.conj(self.Hx)) / 2
+        Sx = (self.Ey_r * np.conj(self.Hz_r) - self.Ez_r * np.conj(self.Hy_r)) / 2
+        Sy = (self.Ez_r * np.conj(self.Hx_r) - self.Ex_r * np.conj(self.Hz_r)) / 2
+        Sz = (self.Ex_r * np.conj(self.Hy_r) - self.Ey_r * np.conj(self.Hx_r)) / 2
         # power per element, ie S dot z * surface area
-        P = Sz * self.array.element_antenna.L * self.array.element_antenna.W
+        P = np.abs(Sz * self.array.element_antenna.L * self.array.element_antenna.W)
         return P
 
     def directive_gain_huygens(self, theta, phi, polarization='x', E_theta=None, E_phi=None):
@@ -387,8 +391,8 @@ class ReflectArray:
         """
         # compute the far field
         if E_theta is None or E_phi is None:
-            E_theta, E_phi = self.far_field(theta, phi)
-        E_theta, E_phi = self.far_field(theta, phi)
+            E_theta, E_phi = self.far_field_huygens(theta, phi)
+        E_theta, E_phi = self.far_field_huygens(theta, phi)
         # compute the co and cross polarized components
         E_co, E_cross = self.co_cross_pol(theta, phi, polarization, E_theta, E_phi)
         # compute the directive gains (co and cross) dividing the radiated power by the
@@ -447,6 +451,81 @@ class ReflectArray:
             obj = ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], Ex_i,
                               Ey_i, Ez_i, scalars=np.angle(self.Ex_i), scale_mode='none', **kwargs)
             obj.glyph.color_mode = 'color_by_scalar'
+
+    def draw_specular_reflection_vector(self, **kwargs):
+        # transform k in gcs
+        kx_g = np.zeros_like(self.kx)
+        ky_g = np.zeros_like(self.ky)
+        kz_g = np.zeros_like(self.kz)
+        for i in range(self.array.points.shape[1]):
+            # transform the local e field in the global frame
+            # create the transformation matrix (same of array.draw_elements_mayavi)
+            R = np.empty((3, 3))
+            R[:, 0] = self.array.el_x[:, i]
+            R[:, 1] = self.array.el_y[:, i]
+            R[:, 2] = self.array.el_z[:, i]
+            # compute the global e field
+            kx_g[i], ky_g[i], kz_g[i] = R @ np.array([self.kx[i], self.ky[i], self.kz[i]])
+        # draw the specular reflection vector
+        ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], kx_g,
+                    ky_g, kz_g, color=(0, 0, 1), **kwargs)
+
+    def draw_reflected_field(self, **kwargs):
+        # transform E_r and H_r in gcs
+        Ex_g = np.zeros_like(self.Ex_r)
+        Ey_g = np.zeros_like(self.Ey_r)
+        Ez_g = np.zeros_like(self.Ez_r)
+        Hx_g = np.zeros_like(self.Hx_r)
+        Hy_g = np.zeros_like(self.Hy_r)
+        Hz_g = np.zeros_like(self.Hz_r)
+        # compute the phase shift for each reflected local plane wave
+        free_space = np.angle(self.Ex_i)
+        phase_shift = self.phase_shift + free_space
+        # remove the phase shift offset from E
+        Ex_r = self.Ex_r * np.exp(-1j * phase_shift)
+        Ey_r = self.Ey_r * np.exp(-1j * phase_shift)
+        Ez_r = self.Ez_r * np.exp(-1j * phase_shift)
+        # remove the phase shift offset from H
+        Hx_r = self.Hx_r * np.exp(-1j * phase_shift)
+        Hy_r = self.Hy_r * np.exp(-1j * phase_shift)
+        Hz_r = self.Hz_r * np.exp(-1j * phase_shift)
+        for i in range(self.array.points.shape[1]):
+            # transform the local e field in the global frame
+            # create the transformation matrix (same of array.draw_elements_mayavi)
+            R = np.empty((3, 3)).astype(complex)
+            R[:, 0] = self.array.el_x[:, i]
+            R[:, 1] = self.array.el_y[:, i]
+            R[:, 2] = self.array.el_z[:, i]
+            # compute the global e field
+            Ex_g[i], Ey_g[i], Ez_g[i] = R @ np.array([Ex_r[i], Ey_r[i], Ez_r[i]])
+            Hx_g[i], Hy_g[i], Hz_g[i] = R @ np.array([Hx_r[i], Hy_r[i], Hz_r[i]])
+        # draw the specular reflection vector
+
+        # print the maximum and minimum imaginary part of the reflected field
+        print('max and min imaginary part of the reflected field:')
+        print('Ex: ', np.max(np.imag(Ex_g)), np.min(np.imag(Ex_g)))
+        print('Ey: ', np.max(np.imag(Ey_g)), np.min(np.imag(Ey_g)))
+        print('Ez: ', np.max(np.imag(Ez_g)), np.min(np.imag(Ez_g)))
+        print('Hx: ', np.max(np.imag(Hx_g)), np.min(np.imag(Hx_g)))
+        print('Hy: ', np.max(np.imag(Hy_g)), np.min(np.imag(Hy_g)))
+        print('Hz: ', np.max(np.imag(Hz_g)), np.min(np.imag(Hz_g)))
+        # print maximum and minimum real part of the reflected field
+        print('max and min real part of the reflected field:')
+        print('Ex: ', np.max(np.real(Ex_g)), np.min(np.real(Ex_g)))
+        print('Ey: ', np.max(np.real(Ey_g)), np.min(np.real(Ey_g)))
+        print('Ez: ', np.max(np.real(Ez_g)), np.min(np.real(Ez_g)))
+        print('Hx: ', np.max(np.real(Hx_g)), np.min(np.real(Hx_g)))
+        print('Hy: ', np.max(np.real(Hy_g)), np.min(np.real(Hy_g)))
+        print('Hz: ', np.max(np.real(Hz_g)), np.min(np.real(Hz_g)))
+        # draw the specular reflection vector
+        ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :], np.real(Ex_g),
+                    np.real(Ey_g), np.real(Ez_g),
+                    color=(1, 0, 0), **kwargs)
+        ml.quiver3d(self.array.points[0, :], self.array.points[1, :], self.array.points[2, :],
+                    np.real(Hx_g) * self.array.element_antenna.eta,
+                    np.real(Hy_g) * self.array.element_antenna.eta,
+                    np.real(Hz_g) * self.array.element_antenna.eta,
+                    color=(0, 1, 0), **kwargs)
 
     def draw_reflected_tangential_e_field(self, phase_color=False, **kwargs):
         """
@@ -516,14 +595,14 @@ if __name__ == "__main__":
     L = 2
     W = 0.3
     # circular section angle
-    tc = 90 * pi / 180
+    tc = 100 * pi / 180
     ## create the array
     array, radius = create_cylindrical_array(L, W, tc, dx, freq)
     ## create the feed
     # position the feed at the focus of the cylinder on the z axis pointing down
     x = 0
     y = 0
-    z = 1.5  # m
+    z = 0.5  # m
     feed = FeedAntenna(x, y, z, 0, 0, -1, 1, 0, 0, freq)
     ## create ra cell
     cell = RACell()
@@ -575,14 +654,12 @@ if __name__ == "__main__":
     # %%
     print('drawing reflected tangential field...')
     reflectarray.draw_reflected_tangential_e_field(phase_color=True, scale_factor=dx)
-    # %%
+
     ml.show()
 
-    # %% RA test COLLIMATION AND reflected tangential field computation and visualization
-    # call the update function
-    reflectarray.__update__()
-    # redraw the reflectarray mayavi
-    scene = ml.figure(2, bgcolor=(0, 0, 0))
+    # %%  draw the reflected plane wave vectors, they should form a right handed base e h k
+    reflectarray.__update__(reflect=True)
+    ml.figure(10, bgcolor=(0, 0, 0))
     ml.clf()
     # draw the array
     reflectarray.array.draw_elements_mayavi(color=(.6, .4, 0.1))
@@ -590,76 +667,99 @@ if __name__ == "__main__":
     reflectarray.feed.draw_feed(scale=1)
     # draw the feed lcs
     reflectarray.feed.plot_lcs(scale_factor=0.05)
-    # draw the surface phase shifts
-    reflectarray.array.draw_element_surfaces_mayavi(parameter=reflectarray.phase_shift / (2 * pi))
-    # draw the reflected tangential field
-    ml.show()
+    # draw the specular reflection vector
+    reflectarray.draw_specular_reflection_vector(scale_factor=dx, mode='arrow')
+    # draw the reflected field
+    reflectarray.draw_reflected_field(scale_factor=dx, mode='arrow')
+    ml.show() # so far all good
 
-    # # %% test the far field
-    # # phi = 0 cut (azimuthal)
-    # theta = np.linspace(-pi / 2, pi / 2, 3600)
-    # phi = np.ones_like(theta) * 0
-    # Etheta, Ephi = reflectarray.far_field(theta, phi)
-    # # plot the far field
-    # fig, ax = plt.subplots(1)
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta)), label='Etheta e-cut')
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi)), label='Ephi e-cut')
-    # ax.set_xlabel('theta [deg]')
-    # ax.set_ylabel('E [dB]')
-    # ax.set_title('Far field')
-    # # add to the plot the individual x and y components
-    # # 1. set the complex excitation of the elements as the reflected field
-    # reflectarray.array.excitations = reflectarray.Ex_r
-    # # set the elements polarisation to x
-    # reflectarray.array.polarization = "x"
-    # # 2. compute the far field
-    # Etheta_x, Ephi_x = reflectarray.array.far_field(theta, phi)
-    # # y component
-    # # set the elements polarisation to y
-    # reflectarray.array.polarization = "y"
-    # # 1. set the complex excitation of the elements as the reflected field
-    # reflectarray.array.excitations = reflectarray.Ey_r
-    # # 2. compute the far field
-    # Etheta_y, Ephi_y = reflectarray.array.far_field(theta, phi)
-    # # 3. plot the components
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_x)), label='Etheta x')
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_x)), label='Ephi x')
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_y)), label='Etheta y')
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_y)), label='Ephi y')
-    # ax.legend()
-    # plt.show()
-    # # phi =90 cut (polar)
-    # phi = np.ones_like(theta) * pi / 2
-    # Etheta, Ephi = reflectarray.far_field(theta, phi)
-    # # plot the far field
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta)), '--', label='Etheta h-cut')
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi)), '--', label='Ephi h-cut')
-    # ax.legend()
-    # plt.show()
-    #
-    # # add to the plot the individual x and y components
-    # # 1. set the complex excitation of the elements as the reflected field
-    # reflectarray.array.excitations = reflectarray.Ex_r
-    # # set the elements polarisation to x
-    # reflectarray.array.polarization = "x"
-    # # 2. compute the far field
-    # Etheta_x, Ephi_x = reflectarray.array.far_field(theta, phi)
-    # # y component
-    # # set the elements polarisation to y
-    # reflectarray.array.polarization = "y"
-    # # 1. set the complex excitation of the elements as the reflected field
-    # reflectarray.array.excitations = reflectarray.Ey_r
-    # # 2. compute the far field
-    # Etheta_y, Ephi_y = reflectarray.array.far_field(theta, phi)
-    # # 3. plot the components
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_x)), '--', label='Etheta x')
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_x)), '--', label='Ephi x')
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_y)), '--', label='Etheta y')
-    # ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_y)), '--', label='Ephi y')
-    # ax.legend()
-    # plt.show()
+    # %% RA test COLLIMATION AND reflected tangential field computation and visualization
+    # call the update function
+    # reflectarray.__update__()
+    # # redraw the reflectarray mayavi
+    # scene = ml.figure(2, bgcolor=(0, 0, 0))
+    # ml.clf()
+    # # draw the array
+    # reflectarray.array.draw_elements_mayavi(color=(.6, .4, 0.1))
+    # # draw the feed
+    # reflectarray.feed.draw_feed(scale=1)
+    # # draw the feed lcs
+    # reflectarray.feed.plot_lcs(scale_factor=0.05)
+    # # draw the surface phase shifts
+    # reflectarray.array.draw_element_surfaces_mayavi(parameter=reflectarray.phase_shift / (2 * pi))
+    # # draw the reflected tangential field
+    # ml.show()
 
+    ################################################
+
+    # %% test the far field
+    # phi = 0 cut (azimuthal)
+    theta = np.linspace(-pi / 2, pi / 2, 3600)
+    phi = np.ones_like(theta) * 0
+    Etheta, Ephi = reflectarray.far_field(theta, phi)
+    # plot the far field
+    fig, ax = plt.subplots(1)
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta)), label='Etheta e-cut (non huygens)')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi)), label='Ephi e-cut (non huygens)')
+    ax.set_xlabel('theta [deg]')
+    ax.set_ylabel('E [dB]')
+    ax.set_title('Far field')
+    # add to the plot the individual x and y components
+    # 1. set the complex excitation of the elements as the reflected field
+    reflectarray.array.excitations = reflectarray.Ex_r
+    # set the elements polarisation to x
+    reflectarray.array.polarization = "x"
+    # set huygens source type
+    reflectarray.array.source_type = "huygens"
+    # 2. compute the far field
+    Etheta_x, Ephi_x = reflectarray.array.far_field(theta, phi)
+    # y component
+    # set the elements polarisation to y
+    reflectarray.array.polarization = "y"
+    # 1. set the complex excitation of the elements as the reflected field
+    reflectarray.array.excitations = reflectarray.Ey_r
+    # 2. compute the far field
+    Etheta_y, Ephi_y = reflectarray.array.far_field(theta, phi)
+    # 3. plot the components
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_x)), label='Etheta x')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_x)), label='Ephi x')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_y)), label='Etheta y')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_y)), label='Ephi y')
+    ax.legend()
+    plt.show()
+    # phi =90 cut (polar)
+    phi = np.ones_like(theta) * pi / 2
+    Etheta, Ephi = reflectarray.far_field(theta, phi)
+    # plot the far field
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta)), '-.', label='Etheta h-cut (non huygens)')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi)), '-.', label='Ephi h-cut (non huygens)')
+    ax.legend()
+    plt.show()
+
+    # add to the plot the individual x and y components
+    # 1. set the complex excitation of the elements as the reflected field
+    reflectarray.array.excitations = reflectarray.Ex_r
+    # set the elements polarisation to x
+    reflectarray.array.polarization = "x"
+    # 2. compute the far field
+    Etheta_x, Ephi_x = reflectarray.array.far_field(theta, phi)
+    # y component
+    # set the elements polarisation to y
+    reflectarray.array.polarization = "y"
+    # 1. set the complex excitation of the elements as the reflected field
+    reflectarray.array.excitations = reflectarray.Ey_r
+    # 2. compute the far field
+    Etheta_y, Ephi_y = reflectarray.array.far_field(theta, phi)
+    # 3. plot the components
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_x)), '--', label='Etheta x')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_x)), '--', label='Ephi x')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Etheta_y)), '--', label='Etheta y')
+    ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ephi_y)), '--', label='Ephi y')
+    ax.legend()
+    plt.show()
+    ###########################################################################################################################
     # %% test the co and cross polarized components
+
     theta = np.linspace(-pi / 2, pi / 2, 1800)
     phi = np.ones_like(theta) * 0
 
@@ -670,7 +770,7 @@ if __name__ == "__main__":
     # compare with old huygens method
     Etheta_huygens, Ephi_huygens = reflectarray.far_field_huygens(theta, phi)
     Ex_co_huygens, Ex_cross_huygens = reflectarray.co_cross_pol(theta, phi, polarization='x', E_theta=Etheta_huygens,
-                                                                        E_phi=Ephi_huygens)
+                                                                E_phi=Ephi_huygens)
     # plot the far field
     fig, ax = plt.subplots(1)
     ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ex_co)), label='Ex co')
@@ -693,9 +793,10 @@ if __name__ == "__main__":
     Ex_co, Ex_cross = reflectarray.co_cross_pol(theta, phi, polarization='x', E_theta=Etheta, E_phi=Ephi)
     Ey_co, Ey_cross = reflectarray.co_cross_pol(theta, phi, polarization='y', E_theta=Etheta, E_phi=Ephi)
     # compare with old huygens method
+    print("comparison with huygens method")
     Etheta_huygens, Ephi_huygens = reflectarray.far_field_huygens(theta, phi)
     Ex_co_huygens, Ex_cross_huygens = reflectarray.co_cross_pol(theta, phi, polarization='x', E_theta=Etheta_huygens,
-                                                                        E_phi=Ephi_huygens)
+                                                                E_phi=Ephi_huygens)
     ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ex_co)), label='Ex co')
     ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ey_co)), label='Ey co')
     ax.plot(theta * 180 / pi, 20 * np.log10(np.abs(Ex_cross)), '--', label='Ex cross')
@@ -707,6 +808,7 @@ if __name__ == "__main__":
     ## aperture comparison
     from radartools.farField import UniformAperture
 
+    print("comparison with uniform aperture")
     # aperture
     eqap = UniformAperture(2.0250, 0.3021, freq)
     # theta and phi axes, phi = 0 cut
@@ -745,7 +847,7 @@ if __name__ == "__main__":
     # draw the ra
     reflectarray.draw_reflectarray()
     # draw the power on the surface
-    reflectarray.array.draw_element_surfaces_mayavi(parameter=Prad_y / np.max(Prad))
+    reflectarray.array.draw_element_surfaces_mayavi(parameter=Prad_y / np.max(Prad_y))
     ml.show()
 
     # %% test the directive gain and compare plots with uniform aperture gain,
@@ -754,14 +856,20 @@ if __name__ == "__main__":
     phi0 = np.ones_like(theta) * 0
     phi90 = np.ones_like(theta) * pi / 2
     # compute the directive gain
-    Gco, Gcross = reflectarray.directive_gain(theta, phi0, polarization='x')
+    Gco, Gcross = reflectarray.directive_gain_huygens(theta, phi0, polarization='x')
     # plot the directive gain
     fig, ax = plt.subplots(1)
-    ax.plot(theta * 180 / pi, 10 * np.log10(Gco), label='Gco phi0')
-    ax.plot(theta * 180 / pi, 10 * np.log10(Gcross), label='Gcross phi0')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gco), label='Gco phi0 huygens')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gcross), label='Gcross phi0 huygens')
+    Gco, Gcross = reflectarray.directive_gain_huygens(theta, phi90, polarization='x')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gco), label='Gco phi90 huygens')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gcross), label='Gcross phi90 huygens')
+    Gco, Gcross = reflectarray.directive_gain(theta, phi0, polarization='x')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gco), label='Gco phi0 (full)')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gcross), label='Gcross phi0 (full)')
     Gco, Gcross = reflectarray.directive_gain(theta, phi90, polarization='x')
-    ax.plot(theta * 180 / pi, 10 * np.log10(Gco), label='Gco phi90')
-    ax.plot(theta * 180 / pi, 10 * np.log10(Gcross), label='Gcross phi90')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gco), label='Gco phi90 (full)')
+    ax.plot(theta * 180 / pi, 10 * np.log10(Gcross), label='Gcross phi90 (full)')
     ax.set_xlabel('theta [deg]')
     ax.set_ylabel('G [dB]')
     ax.set_title('Directive gain')

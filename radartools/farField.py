@@ -348,6 +348,7 @@ class UniformAperture(Aperture):
         self.Theta, self.Phi, self.f = self.theor_rect_field_transform(theta_mesh, phi_mesh)
         self.f *= self.e_amplitude # correct scaling for f theorical
         if source_type == "huygens":
+            print("    - computing far field assuming Huygens sources")
             # obliquity factors for Huygens source, differences in polarization come in the cas e of PEC or PMC apertures
             c_t = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
             c_p = 1 / 2 * (np.ones_like(self.Theta) + cos(self.Theta))
@@ -361,6 +362,7 @@ class UniformAperture(Aperture):
             else:
                 print("Error, polarization shall be either x or y")
         elif source_type == "magnetic":
+            print("    - computing far field assuming magnetic sources")
             # in this case the fource field is assumed to be a magnetic field of amplitude self.e_amplitude
             # obliquity factors for magnetic field (PEC sheet cutout) (18.4.9 - magnetic source)
             c_t = cos(self.Theta) * self.eta
@@ -375,6 +377,7 @@ class UniformAperture(Aperture):
             else:
                 print("Error, polarization shall be either x or y")
         elif source_type == "electric":
+            print("    - computing far field assuming electric sources")
             # in this case the fource field is assumed to be an electric field of amplitude self.e_amplitude
             # obliquity factors for electric field (PMC sheet cutout) (18.4.9 - electric source)
             c_t = 1
