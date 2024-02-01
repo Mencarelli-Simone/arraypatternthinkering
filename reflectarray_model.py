@@ -291,6 +291,15 @@ class ReflectArray:
         :return: far field E_theta, E_phi
         """
         print('computing far field...')  # todo change this to an aperture integration, but keep this for testing
+        # all0cate the output
+        Etheta_e_x = 1j * np.zeros_like(theta)
+        Ephi_e_x = 1j * np.zeros_like(theta)
+        Etheta_e_y = 1j * np.zeros_like(theta)
+        Ephi_e_y = 1j * np.zeros_like(theta)
+        Etheta_m_x = 1j * np.zeros_like(theta)
+        Ephi_m_x = 1j * np.zeros_like(theta)
+        Etheta_m_y = 1j * np.zeros_like(theta)
+        Ephi_m_y = 1j * np.zeros_like(theta)
         # x component electric
         # 1. set the complex excitation of the elements as the reflected field
         self.array.excitations = self.Ex_r
@@ -428,9 +437,9 @@ class ReflectArray:
         return Gco, Gcross
 
     # graphics
-    def draw_reflectarray(self):
+    def draw_reflectarray(self, **kwargs):
         # draw the array
-        self.array.draw_elements_mayavi()
+        self.array.draw_elements_mayavi(**kwargs)
         # draw the feed
         self.feed.draw_feed(scale=1)
 

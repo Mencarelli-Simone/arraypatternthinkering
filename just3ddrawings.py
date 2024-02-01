@@ -1,4 +1,5 @@
-# this file creates a reflectarray from an abaqus mesh
+# this file is used to create an antenna pattern starting from a shape file and reflectaray geometry
+# the antenna pattern is then saved in a ffs file
 
 # %% import
 import numpy as np
@@ -10,6 +11,8 @@ from conformal_array_pattern import ConformalArray
 from feed_antenna_pattern import FeedAntenna
 from abaqus_mesh_grid_reader import AbaqusMesh
 from radartools.farField import UniformAperture
+from ffsFileWriter import ffsWrite
+from tqdm import tqdm
 
 # %% user input
 # abaqus mesh file
@@ -20,26 +23,45 @@ xpoints = 23
 ypoints = 144
 # y points valid indexes
 y_idx = np.linspace(0, ypoints - 12, ypoints - 11, dtype=int)
+
+## output files
+# undeformed
+undeformed_file = 'undeformeddddddd.ffs'
+# deformed
+deformed_file = 'deformedddddddddd.ffs'
+
 ## for the array
 # cell size
 dx = 0.015
 # feed distance from surface (center feed)
 rf = 1  # m
+
 # frequency
 freq = 10e9  # Hz
+
+# Undeformed on or off
+undeformed = True  # if false, only the deformed shape is computed, if true both are exported
+
 # Surface plots on or off
-surface_plots = False
+surface_plots = True
 if ~surface_plots:
     print("surface plots are off,no phase visualization or power visualization")
 else:
     print("surface plots are on, plotting might be very slow")
+
+## create a theta phi meshgrid ( just the positive hemisphere is fine)
+theta = np.linspace(0, np.pi / 2, 1801)
+phi = np.linspace(0, 2 * np.pi, 1801)
+T, P = np.meshgrid(theta, phi)
+
 # %% unit cell element
 element = UniformAperture(dx, dx, freq)
 
 # %% array lcs and points extraction
 # create an abaqus mesh object
 mesh = AbaqusMesh(filename, rows, columns, xpoints, ypoints)
-mesh.half_symmetry()  # to use for the current file, todo not use it
+mesh.half_symmetry()  # to use for the current file, todo not use it if different from mode 1
+# mesh.scale(5,5,5)
 # extract the origins
 xc, yc, zc, xc_d, yc_d, zc_d = mesh.get_cell_centers()
 # extract the lcss
@@ -119,25 +141,28 @@ y = np.array([-dx / 2, dx / 2])
 z = np.array([[0, 0], [0, 0]])
 ref_def.array.set_element_surface(x, y, z)
 ref_undef.array.set_element_surface(x, y, z)
-# undeformed
-ml.figure(1, bgcolor=(0, 0, 0))
+# # undeformed
+# ml.figure(1, bgcolor=(60/256, 60/256, 60/256))
+# # clear
+# ml.clf()
+# # meshgrid
+# ref_undef.draw_reflectarray()
+# # lcs
+# ref_undef.array.plot_lcs_mayavi(length=dx / 2)
+# # feed lcs
+# ref_undef.feed.plot_lcs(scale_factor=dx / 2)
+# # deformed
+ml.figure(2, bgcolor=(62 / 256, 62 / 256, 62 / 256))
 # clear
 ml.clf()
-# meshgrid
-ref_undef.draw_reflectarray()
+# ref_def.draw_reflectarray(color=(1, 1, 1))
+ref_undef.feed.plot_lcs(scale_factor=dx * 4, mode='arrow')
+ref_undef.array.draw_elements_mayavi(color=(.8, .8, .7))
 # lcs
-ref_undef.array.plot_lcs_mayavi(length=dx / 2)
-# feed lcs
-ref_undef.feed.plot_lcs(scale_factor=dx / 2)
-# deformed
-ml.figure(2, bgcolor=(0, 0, 0))
-# clear
-ml.clf()
-ref_def.draw_reflectarray()
-ref_undef.array.draw_elements_mayavi(color=(.2, .2, .2))
-# lcs
-ref_def.array.plot_lcs_mayavi(length=dx / 2)
+ref_undef.array.plot_lcs_mayavi(length=dx/2, mode='arrow')
+ref_undef.feed.draw_feed(scale=2)
 ml.show()
+
 
 # %% collimate the reflectarray in the nominal configuration
 print("collimating the reflectarray ...")
@@ -148,98 +173,28 @@ ref_def.phase_shift = phase_shifts
 ref_def.__update__(collimate=False, reflect=True)
 ref_undef.__update__(collimate=False, reflect=True)
 # % %debugg plotting, check the phase shift in the two reflectarrays
-# create mayavi figure for the undeformed
-ml.figure(4, bgcolor=(0, 0, 0))
-# clear
-ml.clf()
-# draw the reflectarray undeformed
-ref_undef.draw_reflectarray()
-# draw the surfaces
 if surface_plots:
-    print("drawing surfaces ...")
-    ref_undef.array.draw_element_surfaces_mayavi(parameter=ref_undef.phase_shift / (2 * pi))
-# create mayavi figure for the deformed
-ml.figure(5, bgcolor=(0, 0, 0))
-# clear
-ml.clf()
-# draw the reflectarray deformed
-ref_def.draw_reflectarray()
-# draw the surfaces
-if surface_plots:
-    print("drawing surfaces ...")
-    ref_def.array.draw_element_surfaces_mayavi(parameter=ref_def.phase_shift / (2 * pi))
-# show
-ml.show()
-
-# %% debug plotting, check the radiated power in the two reflectarrays
-# compute the radiated power on surface
-Prad_x = np.abs(ref_undef.Ex_r) ** 2 / (2 * ref_undef.array.element_antenna.eta)
-Prad = (np.abs(ref_undef.Ex_r) ** 2 + np.abs(ref_undef.Ey_r) ** 2) / (
-        2 * ref_undef.array.element_antenna.eta)
-# create mayavi figure for the undeformed
-ml.figure(6, bgcolor=(0, 0, 0))
-# clear
-ml.clf()
-# draw the reflectarray undeformed
-ref_undef.draw_reflectarray()
-# draw the surfaces
-if surface_plots:
-    print("drawing surfaces ...")
-    ref_undef.array.draw_element_surfaces_mayavi(parameter=Prad_x / np.max(Prad))
-# radiated power defomrmed on x
-Prad_x_d = np.abs(ref_def.Ex_r) ** 2 / (2 * ref_def.array.element_antenna.eta)
-# plotting
-ml.figure(7, bgcolor=(0, 0, 0))
-# clear
-ml.clf()
-# draw the reflectarray deformed
-ref_def.draw_reflectarray()
-# draw the surfaces
-if surface_plots:
-    print("drawing surfaces ...")
-    ref_def.array.draw_element_surfaces_mayavi(parameter=Prad_x_d / np.max(Prad)) # avoid using this function when possible
-ml.show()
-
-
-#%% power difference deformed undeformed
-pdiff = Prad_x - Prad_x_d
-pdiff = pdiff.reshape(norm1_d.shape) / np.max(Prad)
-# plot as colormap
-fig, ax = plt.subplots(1)
-c = ax.pcolormesh(pdiff)
-fig.colorbar(c, ax=ax)
-plt.show()
-# %% far field calculation
-from numpy import pi
-
-theta = np.linspace(-pi / 8, pi / 8, 1800)
-phi1 = np.ones_like(theta) * pi / 2
-phi0 = np.zeros_like(theta)
-# undeformed
-Gco0, Gcross0 = ref_undef.directive_gain(theta, phi0, polarization='x')
-Gco1, Gcross1 = ref_undef.directive_gain(theta, phi1, polarization='x')
-# deformed
-Gco0_d, Gcross0_d = ref_def.directive_gain(theta, phi0, polarization='x')
-Gco1_d, Gcross1_d = ref_def.directive_gain(theta, phi1, polarization='x')
-# %% plotting
-plt.figure(3)
-plt.clf()
-plt.plot(theta * 180 / pi, 10 * np.log10(Gco0), '--', label='co-pol')
-plt.plot(theta * 180 / pi, 10 * np.log10(Gcross0), '--', label='cross-pol')
-plt.plot(theta * 180 / pi, 10 * np.log10(Gco1), '--', label='co-pol')
-plt.plot(theta * 180 / pi, 10 * np.log10(Gcross1), '--', label='cross-pol')
-# deformed
-plt.plot(theta * 180 / pi, 10 * np.log10(Gco0_d), label='co-pol')
-plt.plot(theta * 180 / pi, 10 * np.log10(Gcross0_d), label='cross-pol')
-plt.plot(theta * 180 / pi, 10 * np.log10(Gco1_d), label='co-pol')
-plt.plot(theta * 180 / pi, 10 * np.log10(Gcross1_d), label='cross-pol')
-plt.legend()
-plt.xlabel('theta (deg)')
-plt.ylabel('Gain (dB)')
-# plt.show()
-plt.show()
-
-# %% add comparison with uniform aperture
-
-# %% todo for the paper add a tapered feed field, e.g. double cosine description.
-# todo invert phase envelope to make circles
+    # create mayavi figure for the undeformed
+    ml.figure(4, bgcolor=(0, 0, 0))
+    # clear
+    ml.clf()
+    # draw the reflectarray undeformed
+    ref_undef.draw_reflectarray()
+    ref_undef.feed.draw_feed(scale=1.5)
+    ref_undef.feed.plot_lcs(scale_factor=dx * 3, mode='arrow')
+    # draw the surfaces
+    if surface_plots:
+        print("drawing surfaces ...")
+        ref_undef.array.draw_element_surfaces_mayavi(parameter=ref_undef.phase_shift / (2 * pi))
+    # create mayavi figure for the deformed
+    ml.figure(5, bgcolor=(0, 0, 0))
+    # clear
+    ml.clf()
+    # draw the reflectarray deformed
+    ref_def.draw_reflectarray()
+    # draw the surfaces
+    if surface_plots:
+        print("drawing surfaces ...")
+        ref_def.array.draw_element_surfaces_mayavi(parameter=ref_def.phase_shift / (2 * pi))
+    # show
+    ml.show()

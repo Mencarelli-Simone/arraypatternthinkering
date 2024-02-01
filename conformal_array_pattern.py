@@ -27,6 +27,7 @@ def far_field_global_to_local_spherical_coordinates(theta_global, phi_global,
     :param el_z: local z versors SHALL be a 2d array [3, n_points]
     :return: m x n theta and phi coordinates in the local systems
     """
+
     # 1. transform the global spherical coordinates to the global cartesian coordinates
     r_global = np.ones_like(theta_global)
     x_global = r_global * np.sin(theta_global) * np.cos(phi_global)

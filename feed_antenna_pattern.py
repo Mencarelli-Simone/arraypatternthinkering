@@ -180,8 +180,8 @@ class FeedAntenna():
         R = np.array([self.x, self.y, self.z]).T
         for array in self.feed_wireframe:
             # apply rotation matrix
-            array = R @ array.T + self.pos.reshape(3, 1)
-            ml.plot3d(array[0, :] * scale, array[1, :] * scale, array[2, :] * scale, tube_radius=None, **kwargs)
+            array = R @ (scale*array.T) + self.pos.reshape(3, 1)
+            ml.plot3d(array[0, :], array[1, :] , array[2, :], tube_radius=None, **kwargs)
 
     def plot_lcs(self, **kwargs):
         """
