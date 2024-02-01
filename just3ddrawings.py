@@ -169,6 +169,9 @@ print("collimating the reflectarray ...")
 phase_shifts = ref_undef.collimate_beam(0, 0)
 # set the same phase shifts to the deformed reflectarray
 ref_def.phase_shift = phase_shifts
+
+
+
 # compute the status vector
 ref_def.__update__(collimate=False, reflect=True)
 ref_undef.__update__(collimate=False, reflect=True)
