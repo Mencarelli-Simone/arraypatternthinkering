@@ -76,10 +76,10 @@ P[np.isnan(P)] = 0  # to be safe
 # Isolating co-polar component
 # G_ref = ant_ref.mesh_gain_pattern(T, P) / ant_ref.max_gain()
 G_ref, G_refx = ant_ref.co_cross_polar_gain(T, P)
-G_ref /= np.max(G_ref)
 # G_dist = ant_dist.mesh_gain_pattern(T, P) / ant_ref.max_gain()
 G_dist , G_distx = ant_dist.co_cross_polar_gain(T, P)
 G_dist /= np.max(G_ref)
+G_ref /= np.max(G_ref) # normalise this as last step, otherwise Gdist is not scaled correctly
 
 # 9 AIR
 # ifft in azimuth
@@ -189,13 +189,14 @@ plt.show()
 
 
 fig, ax = plt.subplots(1)
-ax.plot(A[:, 50], 20 * np.log10(np.abs(AIR[:, 50]) / np.max(AIR[:, 50])), label='distorted antenna')
-ax.plot(A[:, 50], 20 * np.log10(np.abs(AIRR[:, 50])), '--', label='reference')
+# ax.plot(A[:, 50], 20 * np.log10(np.abs(AIR[:, 50]) / np.max(AIR[:, 50])), label='distorted antenna')
+ax.plot(A[:, 50], 20 * np.log10(np.abs(AIR[:, 50]) / np.max(np.abs(AIRR[:, 50]))), label='distorted antenna')
+ax.plot(A[:, 50], 20 * np.log10(np.abs(AIRR[:, 50])/ np.max(np.abs(AIRR[:, 50]))), '--', label='reference')
 ax.legend(loc='upper right', prop={"size": 8})
 ax.set_xlabel('ground azimuth [m]')
-ax.set_ylabel('normalized amplitude [dB]')
+ax.set_ylabel('AIS amplitude [dB]')
 ax.set_xlim(-4, 4)
-ax.set_ylim(-28, 0)
+ax.set_ylim(-38, 0)
 
 fig.set_figwidth(fw)
 fig.set_figheight(fh)
@@ -205,7 +206,7 @@ for item in ([ax.title, ax.xaxis.label, ax.yaxis.label, ] +
 plt.tight_layout()
 plt.show()
 plt.rcParams['svg.fonttype'] = 'none'
-fig.savefig("niceplotsforpaper/AIScut.svg", format="svg")
+fig.savefig("niceplotsforpaper/AIScutUnnorm.svg", format="svg")
 # %%
 fig, ax = plt.subplots(1)
 # slice the output for ease of plotting

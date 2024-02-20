@@ -28,6 +28,8 @@ swath = 100e3
 # distorted_pattern = 'dummyDistortedMode2.ffs'
 reference_pattern = 'patterns_good/undeformed.ffs'
 distorted_pattern = 'patterns_good/deformed.ffs'
+# distorted_pattern = 'patterns_good/undeformed.ffs'
+
 
 # %% set scene geometry
 radarGeo = RadarGeometry()
@@ -121,11 +123,11 @@ fontsize = 7
 # %% Plotting
 plt.style.use('dark_background')
 fig, ax = plt.subplots(1)
-ax.plot(incidence * 180 / np.pi, 10 * np.log10(SNR_core_ref), '--', label='reference')
-ax.plot(incidence * 180 / np.pi, 10 * np.log10(SNR_core), '--', label='distorted antenna')
+ax.plot(incidence * 180 / np.pi, 10 * np.log10(SNR_core_ref/np.max(SNR_core_ref)), '--', label='reference')
+ax.plot(incidence * 180 / np.pi, 10 * np.log10(SNR_core/np.max(SNR_core_ref)), '--', label='distorted antenna')
 ax.legend(loc='upper right', prop={"size": 8})
 ax.set_xlabel('incidence angle [deg]')
-ax.set_ylabel('core SNR [dB]')
+ax.set_ylabel('normalised SNR [dB]')
 fig.set_figwidth(fw)
 fig.set_figheight(fh)
 for item in ([ax.title, ax.xaxis.label, ax.yaxis.label, ] +
@@ -134,7 +136,7 @@ for item in ([ax.title, ax.xaxis.label, ax.yaxis.label, ] +
 
 plt.tight_layout()
 plt.rcParams['svg.fonttype'] = 'none'
-fig.savefig("niceplotsforpaper/SNRdeg.svg", format="svg", dpi=600)
+fig.savefig("niceplotsforpaper/SNRNormDeg.svg", format="svg", dpi=600)
 plt.show()
 
 # %%
@@ -170,5 +172,5 @@ ax.plot(rg / 1000, (SNR_core_ref), '-', label='reference')
 ax.plot(rg / 1000, (SNR_core), '--', label='distorted antenna')
 ax.legend()
 ax.set_xlabel('ground range [km]')
-ax.set_ylabel('core SNR [neper]')
+ax.set_ylabel('normalised SNR [neper]')
 plt.show()
